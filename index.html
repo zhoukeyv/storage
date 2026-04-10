@@ -1,170 +1,407 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Storage</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-</head>
-<body class="bg-gray-100 text-gray-800 font-sans p-6">
+    <style>
+        /* 极简暗黑主题 */
+        :root {
+            --bg-color: #121212;
+            --box-bg: #1e1e1e;
+            --item-bg: #282828;
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger: #ef4444;
+            --border: #333;
+            --success: #10b981;
+        }
 
-<div id="app" class="max-w-4xl mx-auto">
-    <div class="bg-white p-6 rounded-lg shadow-md">
-        <h1 class="text-2xl font-bold mb-4 flex justify-between items-center">
-            Storage
-            <div class="text-sm text-green-600 font-bold">✅ 已自动授权</div>
-        </h1>
-
-        <!-- 上传区域 -->
-        <div class="mb-6 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
-            <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload">
-            <button @click="$refs.fileInput.click()" class="bg-blue-500 text-white px-6 py-2 rounded shadow hover:bg-blue-600 transition" :disabled="uploading">
-                {{ uploading ? '🚀 上传中 (大文件请耐心等待)...' : '点击选择文件上传' }}
-            </button>
-        </div>v
-
-        <!-- 文件列表 -->
-        <h2 class="text-xl font-semibold mb-2 border-b pb-2 flex justify-between items-end">
-            <span>文件列表</span>
-            <span class="text-sm text-gray-500 font-normal">点击文件名即可高速下载</span>
-        </h2>
-        <p v-if="loading" class="text-gray-500">正在拉取文件列表...</p>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); color: var(--text-main); max-width: 800px; margin: 40px auto; padding: 20px; }
+        h1 { font-weight: 500; margin-bottom: 30px; letter-spacing: 1px; }
+        h3 { font-weight: 500; font-size: 16px; margin-top: 0; margin-bottom: 16px; color: #fff; }
         
-        <ul class="divide-y divide-gray-200">
-            <li v-for="file in files" :key="file.id" class="py-3 flex justify-between items-center hover:bg-gray-50 transition">
-                <div class="flex items-center space-x-3 px-2">
-                    <span class="text-3xl">📄</span>
-                    <div>
-                        <!-- 直接触发原生高速下载 -->
-                        <a :href="file.browser_download_url" class="text-blue-600 hover:underline font-medium text-lg" target="_blank">{{ file.name }}</a>
-                        <p class="text-xs text-gray-500 mt-1">
-                            大小: {{ (file.size / 1024 / 1024).toFixed(2) }} MB | 日期: {{ new Date(file.created_at).toLocaleString() }}
-                        </p>
-                    </div>
-                </div>
-            </li>
-        </ul>
-        <p v-if="files.length === 0 && !loading" class="text-center text-gray-500 py-8">仓库还是空的哦，快去上传文件吧！</p>
+        .box { background: var(--box-bg); padding: 24px; border-radius: 8px; margin-bottom: 24px; border: 1px solid var(--border); }
+        
+        button, .btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        button:hover { background: var(--accent-hover); }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.05); }
+        
+        /* 拖拽上传区域 */
+        .dropzone { border: 2px dashed var(--border); border-radius: 8px; padding: 40px 20px; text-align: center; color: var(--text-muted); cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); }
+        .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); color: var(--accent); }
+        
+        /* 上传队列与多进度条 */
+        .queue-container { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .task-item { background: var(--item-bg); padding: 12px 16px; border-radius: 6px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+        .task-header { display: flex; justify-content: space-between; font-size: 14px; }
+        .task-name { font-weight: 500; word-break: break-all; }
+        .task-meta { color: var(--text-muted); font-size: 13px; display: flex; gap: 12px; }
+        .task-status { font-variant-numeric: tabular-nums; }
+        .progress-bg { width: 100%; height: 4px; background: #111; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+        .progress-fill.done { background: var(--success); }
+        .progress-fill.error { background: var(--danger); }
+
+        /* 云端列表区域 */
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; background: var(--item-bg); padding: 16px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); transition: border-color 0.2s; }
+        .file-item:hover { border-color: #555; }
+        .file-info { display: flex; flex-direction: column; gap: 6px; }
+        .file-name { font-size: 15px; font-weight: 500; }
+        .file-meta { font-size: 12px; color: var(--text-muted); }
+        
+        .file-actions { display: flex; gap: 8px; }
+        .icon-btn { background: transparent; padding: 8px; border-radius: 6px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .icon-btn.delete:hover { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        svg { width: 18px; height: 18px; fill: currentColor; }
+
+        .status { color: var(--text-muted); font-size: 13px; }
+
+        /* 自定义弹窗 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-box { background: var(--box-bg); padding: 24px; border-radius: 8px; width: 340px; border: 1px solid var(--border); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+        .modal-message { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: break-all; }
+        .modal-input { width: 100%; box-sizing: border-box; background: var(--bg-color); border: 1px solid var(--border); color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 20px; outline: none; }
+        .modal-input:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Storage</h1>
+
+    <!-- 拖拽上传区 -->
+    <div class="box">
+        <h3>上传文件</h3>
+        <div id="dropzone" class="dropzone">
+            点击选择文件，或将多个文件拖拽到此处
+        </div>
+        <input type="file" id="fileInput" multiple style="display: none;">
+        
+        <button id="startUploadBtn" class="btn" style="width: 100%; margin-top: 16px; display: none;">开始统一传输</button>
+        
+        <!-- 多文件队列与进度条 -->
+        <div id="uploadQueue" class="queue-container"></div>
     </div>
-</div>
 
-<script>
-    // ================= 配置区域 =================
-    const GITHUB_OWNER = "zhoukeyv"; 
-    const GITHUB_REPO = "storage";       
-    // 这是你新生成的 Token (反转+Base64)，防止 GitHub 机器人封禁
-    const OBFUSCATED_TOKEN = "RlkyR2hPQTk0MktMRktaSGFBZkNBemM1WEQwY0NEU21RUjZnSDNaUTdOZEM1SjZIZ3RkUExBSGt6UzFfeWR6U2RkQTZwZ3g3MFlNV1dDN0IxMV90YXBfYnVodGln"; 
-    // ===========================================
+    <!-- 云端文件区 -->
+    <div class="box">
+        <div class="list-header">
+            <h3 style="margin: 0;">云端文件</h3>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <span id="downloadStatus" class="status"></span>
+                <button class="btn-secondary" onclick="loadFiles()">刷新</button>
+            </div>
+        </div>
+        <div id="fileList"></div>
+    </div>
 
-    const { createApp } = Vue;
+    <!-- 弹窗 -->
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="modalTitle" class="modal-title"></div>
+            <div id="modalMessage" class="modal-message"></div>
+            <input type="text" id="modalInput" class="modal-input" style="display: none;">
+            <div class="modal-actions">
+                <button id="modalBtnCancel" class="btn-secondary">取消</button>
+                <button id="modalBtnConfirm" class="btn">确定</button>
+            </div>
+        </div>
+    </div>
 
-    createApp({
-        data() {
-            return {
-                files: [],
-                loading: false,
-                uploading: false,
-                realToken: ''
-            }
-        },
-        mounted() {
-            // 页面加载时自动逆向解码出真实 Token
-            try {
-                this.realToken = atob(OBFUSCATED_TOKEN).split('').reverse().join('');
-            } catch (e) {
-                console.error("Token解析失败，请检查配置");
-            }
-            this.fetchFiles(); 
-        },
-        methods: {
-            async apiRequest(endpoint, options = {}) {
-                const headers = { 'Accept': 'application/vnd.github.v3+json' };
-                if (this.realToken) headers['Authorization'] = `token ${this.realToken}`;
-                if (options.headers) Object.assign(headers, options.headers);
+    <script>
+        const WORKER_URL = "https://drive-proxy.coder1232026.workers.dev";
+        const CHUNK_SIZE = 20 * 1024 * 1024; 
+        const MAX_CONCURRENT = 3; 
+
+        // ======================= 弹窗引擎 =======================
+        function showModal({ type, title, message, defaultValue = '' }) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('customModal');
+                document.getElementById('modalTitle').innerText = title;
+                document.getElementById('modalMessage').innerText = message;
+                const inputEl = document.getElementById('modalInput');
+                const btnCancel = document.getElementById('modalBtnCancel');
                 
-                return await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}${endpoint}`, {
-                    ...options, headers
-                });
-            },
+                if (type === 'prompt') { inputEl.style.display = 'block'; inputEl.value = defaultValue; } 
+                else { inputEl.style.display = 'none'; }
+                btnCancel.style.display = (type === 'alert') ? 'none' : 'block';
+                overlay.style.display = 'flex';
 
-            async fetchFiles() {
-                this.loading = true;
-                this.files = [];
-                try {
-                    const res = await this.apiRequest('/releases');
-                    if(res.ok) {
-                        const releases = await res.json();
-                        // 提取所有 Release 中的文件并显示
-                        releases.forEach(release => { this.files.push(...release.assets); });
-                    } else {
-                        // 如果线上测试发现获取列表失败，在控制台打印具体原因
-                        console.error("API请求失败:", await res.text());
-                    }
-                } catch (e) {
-                    console.error("拉取失败, 可能是跨域或网络被拦截:", e);
-                }
-                this.loading = false;
-            },
+                const close = () => { overlay.style.display = 'none'; };
+                btnCancel.onclick = () => { close(); resolve(null); };
+                document.getElementById('modalBtnConfirm').onclick = () => { close(); resolve(type === 'prompt' ? inputEl.value : true); };
+            });
+        }
 
-            // 自动处理单 Release 满 1000 个文件限制，满了自动创建新版本
-            async getOrCreateRelease() {
-                const res = await this.apiRequest('/releases');
-                const releases = await res.json();
+        // ======================= 拖拽与多文件队列逻辑 =======================
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadQueueEl = document.getElementById('uploadQueue');
+        const startUploadBtn = document.getElementById('startUploadBtn');
+
+        let uploadQueue = []; // 待上传的文件队列
+        let isUploading = false;
+
+        // 点击触发选择文件
+        dropzone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
+
+        // 拖拽事件监听
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            addFilesToQueue(e.dataTransfer.files);
+        });
+
+        // 格式化文件大小
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 将选中的文件加入队列并渲染 UI
+        function addFilesToQueue(files) {
+            if (files.length === 0) return;
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const id = 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
                 
-                if (releases.length === 0) return await this.createNewRelease("v1");
+                // 构建任务对象
+                const task = {
+                    id, file, status: 'pending', // pending, uploading, done, error
+                    loaded: 0, speed: '0 MB/s'
+                };
+                uploadQueue.push(task);
 
-                const latestRelease = releases[0];
-                if (latestRelease.assets.length >= 990) {
-                    return await this.createNewRelease("v" + (releases.length + 1));
+                // 生成单独的进度条 UI
+                const taskEl = document.createElement('div');
+                taskEl.className = 'task-item';
+                taskEl.id = id;
+                taskEl.innerHTML = `
+                    <div class="task-header">
+                        <span class="task-name">${file.name} <span style="color:#888;font-size:12px;">(${formatBytes(file.size)})</span></span>
+                        <span class="task-meta">
+                            <span id="speed_${id}" class="task-status">等待中</span>
+                            <span id="percent_${id}" class="task-status">0%</span>
+                        </span>
+                    </div>
+                    <div class="progress-bg">
+                        <div id="bar_${id}" class="progress-fill"></div>
+                    </div>
+                `;
+                uploadQueueEl.appendChild(taskEl);
+            }
+            
+            fileInput.value = ''; // 清空 input 以便重复选同一文件
+            if (!isUploading) startUploadBtn.style.display = 'block';
+        }
+
+        // ======================= 统一传输与切片逻辑 =======================
+        startUploadBtn.addEventListener('click', async () => {
+            if (uploadQueue.length === 0) return;
+            isUploading = true;
+            startUploadBtn.style.display = 'none';
+            dropzone.style.pointerEvents = 'none'; // 上传时禁止继续点击添加
+            dropzone.innerText = "传输中，请勿关闭页面...";
+
+            // 按顺序一个一个文件传，保证 Cloudflare 不被限流
+            for (let task of uploadQueue) {
+                if (task.status === 'pending') {
+                    await processSingleTask(task);
                 }
-                return latestRelease;
-            },
+            }
 
-            async createNewRelease(tagName) {
-                const res = await this.apiRequest('/releases', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        tag_name: tagName, name: `Storage ${tagName}`, body: "Auto generated storage release"
-                    })
-                });
-                return await res.json();
-            },
+            // 全部完成后的收尾工作
+            isUploading = false;
+            dropzone.style.pointerEvents = 'auto';
+            dropzone.innerText = "点击选择文件，或将多个文件拖拽到此处";
+            uploadQueue = []; // 清空逻辑队列
+            
+            await showModal({ type: 'alert', title: '上传完毕', message: '所有队列中的文件均已传输完成！' });
+            setTimeout(() => {
+                uploadQueueEl.innerHTML = ''; // 清空 UI 队列
+                loadFiles(); // 刷新云端列表
+            }, 500);
+        });
 
-            async handleFileUpload(event) {
-                const file = event.target.files[0];
-                if (!file) return;
+        // 核心 XHR 请求
+        function uploadChunkWithProgress(url, chunk, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url);
+                xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded); };
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) resolve();
+                    else reject(new Error(`HTTP ${xhr.status}`));
+                };
+                xhr.onerror = () => reject(new Error("网络异常"));
+                xhr.send(chunk);
+            });
+        }
 
-                this.uploading = true;
-                try {
-                    const targetRelease = await this.getOrCreateRelease();
-                    let uploadUrl = targetRelease.upload_url.split('{')[0]; 
-                    uploadUrl += `?name=${encodeURIComponent(file.name)}`;
+        // 处理单个文件的上传逻辑 (含并发分块)
+        async function processSingleTask(task) {
+            task.status = 'uploading';
+            const speedEl = document.getElementById(`speed_${task.id}`);
+            const percentEl = document.getElementById(`percent_${task.id}`);
+            const barEl = document.getElementById(`bar_${task.id}`);
 
-                    const res = await fetch(uploadUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `token ${this.realToken}`,
-                            'Content-Type': file.type || 'application/octet-stream'
-                        },
-                        body: file
+            speedEl.innerText = "准备中...";
+            
+            const file = task.file;
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            const baseName = `${file.name}__${Date.now()}`; 
+            
+            let currentIndex = 0; 
+            const chunkProgress = new Array(totalChunks).fill(0); 
+
+            let lastUpdate = Date.now();
+            let lastLoaded = 0;
+
+            function updateProgress() {
+                const totalLoaded = chunkProgress.reduce((a, b) => a + b, 0);
+                const percent = file.size === 0 ? 100 : Math.min(100, (totalLoaded / file.size * 100)).toFixed(1);
+                
+                barEl.style.width = `${percent}%`;
+                percentEl.innerText = `${percent}%`;
+
+                const now = Date.now();
+                if (now - lastUpdate > 500) {
+                    const speed = (totalLoaded - lastLoaded) / ((now - lastUpdate) / 1000); 
+                    const mbps = (speed / 1024 / 1024).toFixed(2);
+                    speedEl.innerText = `${mbps} MB/s`;
+                    lastUpdate = now;
+                    lastLoaded = totalLoaded;
+                }
+            }
+
+            async function uploadWorker() {
+                while (currentIndex < totalChunks) {
+                    const i = currentIndex++;
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end); 
+                    const url = `${WORKER_URL}/upload?name=${encodeURIComponent(`${baseName}.part${i + 1}`)}`;
+
+                    await uploadChunkWithProgress(url, chunk, (loadedBytes) => {
+                        chunkProgress[i] = loadedBytes;
+                        updateProgress(); 
                     });
-
-                    if (res.ok) {
-                        this.fetchFiles(); 
-                    } else {
-                        const err = await res.json();
-                        alert("上传失败: " + err.message);
-                    }
-                } catch (e) {
-                    alert("发生错误: " + e.message);
-                } finally {
-                    this.uploading = false;
-                    event.target.value = ''; 
                 }
+            }
+
+            try {
+                // 对于空文件的特殊处理
+                if (file.size === 0) {
+                    await fetch(`${WORKER_URL}/upload?name=${encodeURIComponent(`${baseName}.part1`)}`, { method: 'POST', body: '' });
+                } else {
+                    const workers = Array.from({ length: MAX_CONCURRENT }, () => uploadWorker());
+                    await Promise.all(workers);
+                }
+
+                task.status = 'done';
+                barEl.classList.add('done');
+                barEl.style.width = '100%';
+                percentEl.innerText = '100%';
+                speedEl.innerText = '已完成';
+            } catch (err) {
+                task.status = 'error';
+                barEl.classList.add('error');
+                speedEl.innerText = '失败';
+                speedEl.style.color = 'var(--danger)';
             }
         }
-    }).mount('#app')
-</script>
+
+
+        // ======================= 列表、下载、重命名、删除逻辑 (保持不变) =======================
+        let globalFiles = {}; 
+        async function loadFiles() {
+            const statusEl = document.getElementById('downloadStatus');
+            statusEl.innerText = "正在同步数据...";
+            try {
+                const response = await fetch(`${WORKER_URL}/list`);
+                const assets = await response.json();
+                globalFiles = {};
+                assets.forEach(asset => {
+                    const matchNew = asset.name.match(/(.+)__(\d+)\.part(\d+)$/);
+                    const matchOld = asset.name.match(/(.+)\.part(\d+)$/);
+                    let baseName, displayName, timestamp, partNum;
+                    if (matchNew) { displayName = matchNew[1]; timestamp = parseInt(matchNew[2]); partNum = parseInt(matchNew[3]); baseName = `${displayName}__${timestamp}`; } 
+                    else if (matchOld) { displayName = matchOld[1]; timestamp = null; partNum = parseInt(matchOld[2]); baseName = displayName; } 
+                    else return;
+                    if (!globalFiles[baseName]) globalFiles[baseName] = { displayName, timestamp, parts: [] };
+                    globalFiles[baseName].parts.push({ partNum, url: asset.browser_download_url });
+                });
+                const listEl = document.getElementById('fileList');
+                listEl.innerHTML = "";
+                for (const [baseName, fileData] of Object.entries(globalFiles)) {
+                    fileData.parts.sort((a, b) => a.partNum - b.partNum);
+                    const timeString = fileData.timestamp ? new Date(fileData.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
+                    const item = document.createElement('div');
+                    item.className = "file-item";
+                    item.innerHTML = `
+                        <div class="file-info"><span class="file-name">${fileData.displayName}</span><span class="file-meta">${timeString} • ${fileData.parts.length} 个分块</span></div>
+                        <div class="file-actions">
+                            <button class="icon-btn" title="下载" onclick="downloadFile('${baseName}', '${fileData.displayName}')"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
+                            <button class="icon-btn" title="重命名" onclick="renameFile('${baseName}', '${fileData.displayName}', ${fileData.timestamp})"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+                            <button class="icon-btn delete" title="删除" onclick="deleteFile('${baseName}', '${fileData.displayName}')"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+                        </div>
+                    `;
+                    listEl.appendChild(item);
+                }
+                statusEl.innerText = "";
+            } catch (err) { statusEl.innerText = "数据同步失败"; }
+        }
+
+        async function downloadFile(baseName, suggestName) {
+            const fileData = globalFiles[baseName]; if (!fileData) return;
+            const statusEl = document.getElementById('downloadStatus');
+            try {
+                const fileHandle = await window.showSaveFilePicker({ suggestedName: suggestName });
+                const writable = await fileHandle.createWritable();
+                for (let i = 0; i < fileData.parts.length; i++) {
+                    statusEl.innerText = `正在下载分块... (${i + 1}/${fileData.parts.length})`;
+                    const response = await fetch(fileData.parts[i].url);
+                    await response.body.pipeTo(writable, { preventClose: true }); 
+                }
+                await writable.close();
+                statusEl.innerText = `保存成功！`;
+                setTimeout(() => statusEl.innerText = "", 3000);
+            } catch (err) {
+                if (err.name !== 'AbortError') statusEl.innerText = "写入失败"; else statusEl.innerText = "";
+            }
+        }
+
+        async function deleteFile(baseName, displayName) {
+            if (!(await showModal({ type: 'confirm', title: '确认删除', message: `彻底删除：${displayName} ？` }))) return;
+            document.getElementById('downloadStatus').innerText = `正在删除...`;
+            try { await fetch(`${WORKER_URL}/delete?name=${encodeURIComponent(baseName)}`, { method: 'DELETE' }); document.getElementById('downloadStatus').innerText = ``; loadFiles(); } 
+            catch (e) { document.getElementById('downloadStatus').innerText = `删除失败`; }
+        }
+
+        async function renameFile(oldBaseName, oldDisplayName, timestamp) {
+            const newName = await showModal({ type: 'prompt', title: '重命名', message: '输入新文件名：', defaultValue: oldDisplayName });
+            if (!newName || newName === oldDisplayName) return;
+            document.getElementById('downloadStatus').innerText = `正在重命名...`;
+            try { await fetch(`${WORKER_URL}/rename?old=${encodeURIComponent(oldBaseName)}&new=${encodeURIComponent(timestamp ? `${newName}__${timestamp}` : newName)}`, { method: 'POST' }); document.getElementById('downloadStatus').innerText = ``; loadFiles(); } 
+            catch (e) { document.getElementById('downloadStatus').innerText = `重命名失败`; }
+        }
+        
+        window.onload = loadFiles;
+    </script>
 </body>
 </html>
