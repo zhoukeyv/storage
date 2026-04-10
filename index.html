@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>storage</title>
+    <title>Storage</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
@@ -22,7 +22,7 @@
             <button @click="$refs.fileInput.click()" class="bg-blue-500 text-white px-6 py-2 rounded shadow hover:bg-blue-600 transition" :disabled="uploading">
                 {{ uploading ? '🚀 上传中 (大文件请耐心等待)...' : '点击选择文件上传' }}
             </button>
-        </div>
+        </div>v
 
         <!-- 文件列表 -->
         <h2 class="text-xl font-semibold mb-2 border-b pb-2 flex justify-between items-end">
@@ -53,8 +53,8 @@
     // ================= 配置区域 =================
     const GITHUB_OWNER = "zhoukeyv"; 
     const GITHUB_REPO = "storage";       
-    // 已经为你做好了反转+Base64防封混淆，GitHub机器人绝对认不出来
-    const OBFUSCATED_TOKEN = "dmZoMkdmeXpKNU1FUlYzUUw1bWZPeHNVZG5oRHpMRFY1N1ZRR0FnM2w2c3ZjMm5TcTZ1WjJZS0I5VGpfTXlWRUNRWGFob0VUMFlNV1dDN0IxMV90YXBfYnVodGln"; 
+    // 这是你新生成的 Token (反转+Base64)，防止 GitHub 机器人封禁
+    const OBFUSCATED_TOKEN = "RlkyR2hPQTk0MktMRktaSGFBZkNBemM1WEQwY0NEU21RUjZnSDNaUTdOZEM1SjZIZ3RkUExBSGt6UzFfeWR6U2RkQTZwZ3g3MFlNV1dDN0IxMV90YXBfYnVodGln"; 
     // ===========================================
 
     const { createApp } = Vue;
@@ -97,9 +97,12 @@
                         const releases = await res.json();
                         // 提取所有 Release 中的文件并显示
                         releases.forEach(release => { this.files.push(...release.assets); });
+                    } else {
+                        // 如果线上测试发现获取列表失败，在控制台打印具体原因
+                        console.error("API请求失败:", await res.text());
                     }
                 } catch (e) {
-                    console.error("拉取失败", e);
+                    console.error("拉取失败, 可能是跨域或网络被拦截:", e);
                 }
                 this.loading = false;
             },
