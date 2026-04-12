@@ -459,7 +459,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(metadata)
                 });
-                console.log('保存元数据成功:', metadata);
+                console.log('保存元数据成功');
             } catch (err) {
                 console.error('保存元数据失败:', err);
             }
@@ -471,7 +471,6 @@
         function updateUploadPathDisplay() {
             const el = document.getElementById('uploadPathDisplay');
             el.innerText = currentFolder ? `/${currentFolder}/` : '/';
-            console.log('更新上传路径显示:', currentFolder);
         }
         
         function updateBreadcrumbNav() {
@@ -498,7 +497,6 @@
         
         function navigateToFolder(folderPath) {
             currentFolder = folderPath;
-            console.log('导航到文件夹:', folderPath);
             updateBreadcrumbNav();
             updateUploadPathDisplay();
             renderFileList();
@@ -571,21 +569,17 @@
         function addFilesToQueue(files) {
             if (files.length === 0) return;
             
-            console.log('添加文件到队列，当前文件夹:', currentFolder);
-            
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const id = 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
                 
-                // 关键：根据当前文件夹构建完整路径
+                // 构建完整路径
                 let filePath;
                 if (currentFolder) {
                     filePath = currentFolder + '/' + file.name;
                 } else {
                     filePath = file.name;
                 }
-                
-                console.log('文件路径:', filePath);
                 
                 const task = {
                     id, 
@@ -617,7 +611,7 @@
             if (!isUploading) startUploadBtn.style.display = 'block';
         }
 
-        // ======================= 统一传输与切片逻辑（修复进度条）=======================
+        // ======================= 统一传输与切片逻辑 =======================
         startUploadBtn.addEventListener('click', async () => {
             if (uploadQueue.length === 0) return;
             isUploading = true;
@@ -654,18 +648,12 @@
             
             const file = task.file;
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            
-            // 关键：使用任务的 filePath（包含文件夹路径）
             const baseName = task.filePath + '__' + Date.now();
             
-            console.log('上传文件，baseName:', baseName);
-            
-            // 进度追踪
             let totalUploaded = 0;
             let lastUpdateTime = Date.now();
             let lastUploadedBytes = 0;
             
-            // 更新进度的函数
             function updateProgress(uploadedBytes) {
                 totalUploaded = uploadedBytes;
                 
@@ -675,7 +663,6 @@
                 barEl.style.width = percentText + '%';
                 percentEl.innerText = percentText + '%';
                 
-                // 计算速度
                 const now = Date.now();
                 const timeDiff = now - lastUpdateTime;
                 if (timeDiff >= 300) {
@@ -689,20 +676,16 @@
                 }
             }
 
-            // 上传单个分块
             function uploadChunk(chunkIndex, start, end) {
                 return new Promise((resolve, reject) => {
                     const chunk = file.slice(start, end);
                     const url = `${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part' + (chunkIndex + 1))}`;
-                    
-                    console.log('上传分块:', chunkIndex + 1, 'URL:', url);
                     
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', url);
                     
                     xhr.upload.onprogress = (e) => {
                         if (e.lengthComputable) {
-                            // 当前分块的进度 + 之前所有分块的大小
                             const currentProgress = start + e.loaded;
                             updateProgress(currentProgress);
                         }
@@ -710,7 +693,6 @@
                     
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) {
-                            // 分块完成，确保进度正确
                             updateProgress(end);
                             resolve();
                         } else {
@@ -725,12 +707,10 @@
 
             try {
                 if (file.size === 0) {
-                    // 空文件
                     const url = `${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part1')}`;
                     await fetch(url, { method: 'POST', body: '' });
                     updateProgress(0);
                 } else {
-                    // 顺序上传每个分块（确保进度条稳定）
                     for (let i = 0; i < totalChunks; i++) {
                         const start = i * CHUNK_SIZE;
                         const end = Math.min(start + CHUNK_SIZE, file.size);
@@ -754,7 +734,7 @@
             }
         }
 
-        // ======================= 列表逻辑 =======================
+        // ======================= 列表逻辑（重点修复）=======================
         let globalFiles = {};
         let selectedFiles = new Set();
         
@@ -776,18 +756,30 @@
                 
                 assets.forEach(asset => {
                     // 跳过元数据文件
-                    if (asset.name === '__metadata__.json') return;
+                    if (asset.name === '##SYSTEM_FOLDER_METADATA##') return;
                     
+                    // 匹配格式：路径/文件名__时间戳.partN
                     const match = asset.name.match(/^(.+)__(\d+)\.part(\d+)$/);
-                    if (!match) return;
+                    if (!match) {
+                        console.log('无法解析的文件:', asset.name);
+                        return;
+                    }
                     
-                    const fullPath = match[1];
+                    const fullPath = match[1];  // 完整路径（可能包含文件夹）
                     const timestamp = parseInt(match[2]);
                     const partNum = parseInt(match[3]);
                     
+                    // 关键：正确分离文件夹路径和文件名
                     const lastSlash = fullPath.lastIndexOf('/');
-                    const folderPath = lastSlash > 0 ? fullPath.substring(0, lastSlash) : '';
-                    const fileName = lastSlash > 0 ? fullPath.substring(lastSlash + 1) : fullPath;
+                    let folderPath = '';
+                    let fileName = fullPath;
+                    
+                    if (lastSlash !== -1) {
+                        folderPath = fullPath.substring(0, lastSlash);
+                        fileName = fullPath.substring(lastSlash + 1);
+                    }
+                    
+                    console.log('解析文件:', { fullPath, folderPath, fileName, partNum });
                     
                     if (!globalFiles[fullPath]) {
                         globalFiles[fullPath] = { 
@@ -823,12 +815,15 @@
             // 从元数据获取文件夹
             metadata.folders.forEach(folderPath => {
                 if (currentFolder === '') {
+                    // 根目录：显示一级文件夹
                     if (!folderPath.includes('/')) {
                         folders.add(folderPath);
                     }
                 } else {
-                    if (folderPath.startsWith(currentFolder + '/')) {
-                        const relativePath = folderPath.substring(currentFolder.length + 1);
+                    // 子目录：显示当前目录下的直接子文件夹
+                    const prefix = currentFolder + '/';
+                    if (folderPath.startsWith(prefix)) {
+                        const relativePath = folderPath.substring(prefix.length);
                         if (!relativePath.includes('/')) {
                             folders.add(relativePath);
                         }
@@ -836,15 +831,18 @@
                 }
             });
             
-            // 从文件路径推断文件夹（兼容旧数据）
+            // 从文件路径推断文件夹（兼容旧数据和未在元数据中的文件夹）
             for (const [fullPath, fileData] of Object.entries(globalFiles)) {
                 if (currentFolder === '') {
+                    // 根目录：显示有文件夹路径的文件的父文件夹
                     if (fileData.folderPath && !fileData.folderPath.includes('/')) {
                         folders.add(fileData.folderPath);
                     }
                 } else {
-                    if (fileData.folderPath && fileData.folderPath.startsWith(currentFolder + '/')) {
-                        const relativePath = fileData.folderPath.substring(currentFolder.length + 1);
+                    // 子目录
+                    const prefix = currentFolder + '/';
+                    if (fileData.folderPath && fileData.folderPath.startsWith(prefix)) {
+                        const relativePath = fileData.folderPath.substring(prefix.length);
                         if (!relativePath.includes('/')) {
                             folders.add(relativePath);
                         }
@@ -857,12 +855,16 @@
             for (const [fullPath, fileData] of Object.entries(globalFiles)) {
                 fileData.parts.sort((a, b) => a.partNum - b.partNum);
                 
+                // 根目录：显示没有文件夹路径的文件
+                // 子目录：显示文件夹路径匹配当前目录的文件
                 if (currentFolder === '' && !fileData.folderPath) {
                     files.push({ fullPath, ...fileData });
                 } else if (fileData.folderPath === currentFolder) {
                     files.push({ fullPath, ...fileData });
                 }
             }
+            
+            console.log('渲染列表:', { currentFolder, folders: Array.from(folders), files: files.length });
             
             // 渲染文件夹
             Array.from(folders).sort().forEach(folderName => {
@@ -891,9 +893,10 @@
                 
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
                 
+                // 注意：这里显示的是 fileName，不是 fullPath
                 const item = document.createElement('div');
                 item.className = "file-item";
-                item.id = `file_${file.fullPath}`;
+                item.id = `file_${fullPath}`;
                 item.innerHTML = `
                     <input type="checkbox" class="file-checkbox" onchange="toggleFileSelection('${file.fullPath}', this.checked)">
                     <div class="file-info">
