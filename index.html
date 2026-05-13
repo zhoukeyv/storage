@@ -402,28 +402,35 @@
         const WORKER_URL = "https://drive-proxy.coder1232026.workers.dev";
         const CHUNK_SIZE = 20 * 1024 * 1024;
         const METADATA_FILENAME = 'SYSTEM_FOLDER_METADATA';
-        
-        // 🔥 关键：用占位符替代斜杠（GitHub Asset 文件名不允许 /）
-        const SLASH_TOKEN = '__SLASH__';
-        function pathToAssetPrefix(path) {
-            return path.replaceAll('/', SLASH_TOKEN);
+
+        // ======================= Base64 编解码（URL-safe）=======================
+        // 🔥 关键：避开 GitHub Asset 文件名限制
+        function encodeBaseName(str) {
+            const utf8 = new TextEncoder().encode(str);
+            let bin = '';
+            utf8.forEach(b => bin += String.fromCharCode(b));
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
         }
-        function assetPrefixToPath(prefix) {
-            return prefix.replaceAll(SLASH_TOKEN, '/');
+        function decodeBaseName(encoded) {
+            let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4) b64 += '=';
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
         }
-        
-        // HTML 转义，防止文件名带引号破坏 onclick
+
+        // HTML 转义
         function esc(s) {
             return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
-        // 用于 DOM id 的安全 hash
         function safeId(s) {
             let h = 0;
             for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
             return 'f' + Math.abs(h).toString(36);
         }
-        
-        // ======================= 弹窗引擎 =======================
+
+        // ======================= 弹窗 =======================
         function showModal({ type, title, message, defaultValue = '' }) {
             return new Promise((resolve) => {
                 const overlay = document.getElementById('customModal');
@@ -441,7 +448,7 @@
                 }
                 btnCancel.style.display = (type === 'alert') ? 'none' : 'block';
                 overlay.style.display = 'flex';
-        
+
                 const close = () => { overlay.style.display = 'none'; };
                 btnCancel.onclick = () => { close(); resolve(null); };
                 document.getElementById('modalBtnConfirm').onclick = () => { 
@@ -453,10 +460,10 @@
                 };
             });
         }
-        
+
         // ======================= 元数据 =======================
         let metadata = { folders: [] };
-        
+
         async function loadMetadata() {
             try {
                 const response = await fetch(`${WORKER_URL}/metadata?t=${Date.now()}`);
@@ -474,10 +481,10 @@
                 body: JSON.stringify(metadata)
             });
         }
-        
+
         // ======================= 文件夹导航 =======================
         let currentFolder = '';
-        
+
         function updateUploadPathDisplay() {
             document.getElementById('uploadPathDisplay').innerText = currentFolder ? `/${currentFolder}/` : '/';
         }
@@ -507,13 +514,13 @@
             updateUploadPathDisplay();
             renderFileList();
         }
-        
+
         async function showNewFolderDialog() {
             const folderName = await showModal({ type: 'prompt', title: '新建文件夹', message: '请输入文件夹名称：' });
             if (!folderName || !folderName.trim()) return;
             const trimmedName = folderName.trim();
-            if (trimmedName.includes('/') || trimmedName.includes('\\') || trimmedName.includes(SLASH_TOKEN)) {
-                await showModal({ type: 'alert', title: '错误', message: '文件夹名称不合法' });
+            if (trimmedName.includes('/') || trimmedName.includes('\\')) {
+                await showModal({ type: 'alert', title: '错误', message: '文件夹名称不能包含 / 或 \\' });
                 return;
             }
             const newFolderPath = currentFolder ? `${currentFolder}/${trimmedName}` : trimmedName;
@@ -525,7 +532,7 @@
             await saveMetadata();
             renderFileList();
         }
-        
+
         // ======================= 上传 =======================
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
@@ -533,7 +540,7 @@
         const startUploadBtn = document.getElementById('startUploadBtn');
         let uploadQueue = [];
         let isUploading = false;
-        
+
         dropzone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
         dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -543,14 +550,14 @@
             dropzone.classList.remove('dragover');
             addFilesToQueue(e.dataTransfer.files);
         });
-        
+
         function formatBytes(bytes) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-        
+
         function addFilesToQueue(files) {
             if (files.length === 0) return;
             for (let i = 0; i < files.length; i++) {
@@ -558,7 +565,7 @@
                 const id = 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
                 const filePath = currentFolder ? currentFolder + '/' + file.name : file.name;
                 uploadQueue.push({ id, file, filePath, status: 'pending' });
-        
+
                 const taskEl = document.createElement('div');
                 taskEl.className = 'task-item';
                 taskEl.id = id;
@@ -577,14 +584,14 @@
             fileInput.value = '';
             if (!isUploading) startUploadBtn.style.display = 'block';
         }
-        
+
         startUploadBtn.addEventListener('click', async () => {
             if (uploadQueue.length === 0) return;
             isUploading = true;
             startUploadBtn.style.display = 'none';
             dropzone.style.pointerEvents = 'none';
             dropzone.innerText = "传输中，请勿关闭页面...";
-        
+
             for (let task of uploadQueue) {
                 if (task.status === 'pending') await processSingleTask(task);
             }
@@ -595,7 +602,7 @@
             await showModal({ type: 'alert', title: '上传完毕', message: '所有文件已传输完成！' });
             setTimeout(() => { uploadQueueEl.innerHTML = ''; loadFiles(); }, 500);
         });
-        
+
         async function processSingleTask(task) {
             task.status = 'uploading';
             const speedEl = document.getElementById(`speed_${task.id}`);
@@ -605,8 +612,10 @@
             
             const file = task.file;
             const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-            // 🔥 关键：路径里的 / 替换成占位符
-            const baseName = pathToAssetPrefix(task.filePath) + '__' + Date.now();
+            
+            // 🔥 关键：用 Base64 编码整个 (路径|时间戳)，GitHub 完全不会改它
+            const rawBaseName = task.filePath + '|' + Date.now();
+            const baseName = 'F_' + encodeBaseName(rawBaseName);
             
             let lastUpdateTime = Date.now();
             let lastUploadedBytes = 0;
@@ -623,7 +632,7 @@
                     lastUploadedBytes = uploadedBytes;
                 }
             }
-        
+
             function uploadChunk(chunkIndex, start, end) {
                 return new Promise((resolve, reject) => {
                     const chunk = file.slice(start, end);
@@ -639,7 +648,7 @@
                     xhr.send(chunk);
                 });
             }
-        
+
             try {
                 if (file.size === 0) {
                     await fetch(`${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part1')}`, { method: 'POST', body: '' });
@@ -664,17 +673,17 @@
                 speedEl.style.color = 'var(--danger)';
             }
         }
-        
+
         // ======================= 文件列表 =======================
-        let globalFiles = {};         // key: fullPath（含 /）  value: { fileName, folderPath, timestamp, parts, baseName }
+        let globalFiles = {};
         let selectedFiles = new Set();
-        
+
         async function loadFiles() {
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = "正在同步数据...";
             try {
                 await loadMetadata();
-                        const assetsResponse = await fetch(`${WORKER_URL}/list?t=${Date.now()}`);
+                const assetsResponse = await fetch(`${WORKER_URL}/list?t=${Date.now()}`);
                 const assets = await assetsResponse.json();
                 
                 globalFiles = {};
@@ -684,18 +693,28 @@
                 assets.forEach(asset => {
                     if (asset.name === METADATA_FILENAME) return;
                     
-                    // 匹配 编码后路径__时间戳.partN
-                    const match = asset.name.match(/^(.+)__(\d+)\.part(\d+)$/);
+                    // 🔥 匹配 F_xxxxx.partN
+                    const match = asset.name.match(/^(F_[A-Za-z0-9_-]+)\.part(\d+)$/);
                     if (!match) {
                         console.log('无法解析:', asset.name);
                         return;
                     }
                     
-                    const encodedPath = match[1];                // 含 __SLASH__
-                    const fullPath = assetPrefixToPath(encodedPath); // 还原为 a/b/c.txt
-                    const timestamp = parseInt(match[2]);
-                    const partNum = parseInt(match[3]);
-                    const baseName = encodedPath + '__' + timestamp; // 用于 delete/rename 的 prefix
+                    const baseName = match[1];
+                    const partNum = parseInt(match[2]);
+                    const encoded = baseName.substring(2);  // 去掉 F_
+                    
+                    let fullPath, timestamp;
+                    try {
+                        const decoded = decodeBaseName(encoded);
+                        const sepIdx = decoded.lastIndexOf('|');
+                        if (sepIdx === -1) throw new Error('格式错误');
+                        fullPath = decoded.substring(0, sepIdx);
+                        timestamp = parseInt(decoded.substring(sepIdx + 1));
+                    } catch (e) {
+                        console.error('解码失败:', asset.name, e);
+                        return;
+                    }
                     
                     const lastSlash = fullPath.lastIndexOf('/');
                     const folderPath = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash);
@@ -714,12 +733,11 @@
                 statusEl.innerText = "数据同步失败";
             }
         }
-        
+
         function renderFileList() {
             const listEl = document.getElementById('fileList');
             listEl.innerHTML = "";
             
-            // === 收集当前目录下的子文件夹 ===
             const folders = new Set();
             const collectChild = (path) => {
                 if (currentFolder === '') {
@@ -734,12 +752,10 @@
             };
             
             metadata.folders.forEach(collectChild);
-            // 从文件路径推断（容错）
             for (const fileData of Object.values(globalFiles)) {
                 if (fileData.folderPath) collectChild(fileData.folderPath);
             }
             
-            // === 收集当前目录下的文件 ===
             const files = [];
             for (const [fullPath, fileData] of Object.entries(globalFiles)) {
                 fileData.parts.sort((a, b) => a.partNum - b.partNum);
@@ -748,7 +764,6 @@
                 }
             }
             
-            // === 渲染文件夹 ===
             Array.from(folders).sort().forEach(folderName => {
                 const folderPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
                 const item = document.createElement('div');
@@ -771,7 +786,6 @@
                 listEl.appendChild(item);
             });
             
-            // === 渲染文件 ===
             files.forEach(file => {
                 const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
@@ -811,7 +825,7 @@
                 listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
             }
         }
-        
+
         // ======================= 选择 =======================
         function toggleFileSelection(fullPath, checked) {
             if (checked) selectedFiles.add(fullPath);
@@ -829,7 +843,7 @@
                 el.classList.remove('show');
             }
         }
-        
+
         // ======================= 下载 =======================
         async function downloadFile(fullPath, suggestName) {
             const fileData = globalFiles[fullPath];
@@ -869,7 +883,7 @@
                     const reader = response.body.getReader();
                     try {
                         while (true) {
-                            const { done, value } = await reader.read();
+                                        const { done, value } = await reader.read();
                             if (done) break;
                             
                             if (useFileSystemAPI) await writable.write(value);
@@ -890,7 +904,6 @@
                 if (useFileSystemAPI) {
                     await writable.close();
                 } else {
-                    // 降级：用 Blob 触发下载
                     const blob = new Blob(chunks);
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -908,7 +921,7 @@
                 finishDownloadTask(taskId);
             }
         }
-        
+
         function renderDownloadTask(task) {
             const queueEl = document.getElementById('downloadQueue');
             const taskEl = document.createElement('div');
@@ -951,7 +964,7 @@
             if (bps < 1024 * 1024) return (bps / 1024).toFixed(2) + ' KB/s';
             return (bps / 1024 / 1024).toFixed(2) + ' MB/s';
         }
-        
+
         // ======================= 批量操作 =======================
         async function batchDownload() {
             if (selectedFiles.size === 0) return;
@@ -964,7 +977,7 @@
             document.querySelectorAll('.file-item').forEach(item => item.classList.remove('selected'));
             for (const file of files) await downloadFile(file.fullPath, file.fileName);
         }
-        
+
         async function batchDelete() {
             if (selectedFiles.size === 0) return;
             const count = selectedFiles.size;
@@ -973,7 +986,6 @@
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = `正在删除 ${count} 个文件...`;
             try {
-                // 🔥 关键：用 baseName（已编码）作为 prefix
                 const tasks = Array.from(selectedFiles).map(fullPath => {
                     const baseName = globalFiles[fullPath].baseName;
                     return fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
@@ -988,23 +1000,21 @@
                 statusEl.innerText = '批量删除失败';
             }
         }
-        
+
         // ======================= 删除文件夹 =======================
         async function deleteFolder(folderPath, folderName) {
             if (!(await showModal({ type: 'confirm', title: '确认删除文件夹', message: `确定删除文件夹 "${folderName}" 及其所有内容？` }))) return;
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = '正在删除文件夹...';
             try {
-                // 删除该文件夹及子文件夹下的所有文件
                 const tasks = [];
                 for (const [fullPath, fileData] of Object.entries(globalFiles)) {
-                    if (fullPath.startsWith(folderPath + '/') || fileData.folderPath === folderPath || fileData.folderPath.startsWith(folderPath + '/')) {
+                    if (fileData.folderPath === folderPath || fileData.folderPath.startsWith(folderPath + '/')) {
                         tasks.push(fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(fileData.baseName)}`, { method: 'DELETE' }));
                     }
                 }
                 await Promise.all(tasks);
                 
-                // 元数据里删除该文件夹及子文件夹
                 metadata.folders = metadata.folders.filter(f => f !== folderPath && !f.startsWith(folderPath + '/'));
                 await saveMetadata();
                 
@@ -1015,13 +1025,12 @@
                 statusEl.innerText = '删除失败';
             }
         }
-        
+
         // ======================= 删除单个文件 =======================
         async function deleteFile(fullPath, fileName, baseName) {
             if (!(await showModal({ type: 'confirm', title: '确认删除', message: `彻底删除：${fileName} ？` }))) return;
             document.getElementById('downloadStatus').innerText = '正在删除...';
             try {
-                // 🔥 用 baseName（编码后）作为 prefix
                 await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
                 document.getElementById('downloadStatus').innerText = '';
                 loadFiles();
@@ -1030,7 +1039,7 @@
                 document.getElementById('downloadStatus').innerText = '删除失败';
             }
         }
-        
+
         // ======================= 重命名 =======================
         async function renameFile(oldFullPath, oldFileName, folderPath, oldBaseName, timestamp) {
             const newName = await showModal({ type: 'prompt', title: '重命名', message: '输入新文件名：', defaultValue: oldFileName });
@@ -1042,8 +1051,8 @@
             document.getElementById('downloadStatus').innerText = '正在重命名...';
             try {
                 const newFullPath = folderPath ? `${folderPath}/${newName}` : newName;
-                const newBaseName = pathToAssetPrefix(newFullPath) + '__' + timestamp;
-                // 🔥 用编码后的 baseName
+                // 🔥 用 Base64 重新编码
+                const newBaseName = 'F_' + encodeBaseName(newFullPath + '|' + timestamp);
                 await fetch(
                     `${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(oldBaseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, 
                     { method: 'POST' }
@@ -1055,13 +1064,14 @@
                 document.getElementById('downloadStatus').innerText = '重命名失败';
             }
         }
-        
+
         // ======================= 初始化 =======================
         window.onload = () => {
             loadFiles();
             updateUploadPathDisplay();
         };
 
+        // ======================= 暴露到全局（供 HTML 内联 onclick 调用）=======================
         window.showNewFolderDialog = showNewFolderDialog;
         window.loadFiles = loadFiles;
         window.batchDownload = batchDownload;
