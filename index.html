@@ -401,8 +401,28 @@
     <script>
         const WORKER_URL = "https://drive-proxy.coder1232026.workers.dev";
         const CHUNK_SIZE = 20 * 1024 * 1024;
-        const MAX_CONCURRENT = 3;
-
+        const METADATA_FILENAME = 'SYSTEM_FOLDER_METADATA';
+        
+        // 🔥 关键：用占位符替代斜杠（GitHub Asset 文件名不允许 /）
+        const SLASH_TOKEN = '__SLASH__';
+        function pathToAssetPrefix(path) {
+            return path.replaceAll('/', SLASH_TOKEN);
+        }
+        function assetPrefixToPath(prefix) {
+            return prefix.replaceAll(SLASH_TOKEN, '/');
+        }
+        
+        // HTML 转义，防止文件名带引号破坏 onclick
+        function esc(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+        // 用于 DOM id 的安全 hash
+        function safeId(s) {
+            let h = 0;
+            for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+            return 'f' + Math.abs(h).toString(36);
+        }
+        
         // ======================= 弹窗引擎 =======================
         function showModal({ type, title, message, defaultValue = '' }) {
             return new Promise((resolve) => {
@@ -421,80 +441,66 @@
                 }
                 btnCancel.style.display = (type === 'alert') ? 'none' : 'block';
                 overlay.style.display = 'flex';
-
+        
                 const close = () => { overlay.style.display = 'none'; };
                 btnCancel.onclick = () => { close(); resolve(null); };
                 document.getElementById('modalBtnConfirm').onclick = () => { 
                     close(); 
                     resolve(type === 'prompt' ? inputEl.value : true); 
                 };
-                
                 inputEl.onkeydown = (e) => {
-                    if (e.key === 'Enter') {
-                        close();
-                        resolve(inputEl.value);
-                    }
+                    if (e.key === 'Enter') { close(); resolve(inputEl.value); }
                 };
             });
         }
-
-        // ======================= 元数据管理 =======================
+        
+        // ======================= 元数据 =======================
         let metadata = { folders: [] };
-
+        
         async function loadMetadata() {
             try {
-                const response = await fetch(`${WORKER_URL}/metadata`);
+                const response = await fetch(`${WORKER_URL}/metadata?t=${Date.now()}`);
                 metadata = await response.json();
-                console.log('加载元数据:', metadata);
+                if (!metadata.folders) metadata.folders = [];
             } catch (err) {
                 console.error('加载元数据失败:', err);
                 metadata = { folders: [] };
             }
         }
-
         async function saveMetadata() {
-            try {
-                await fetch(`${WORKER_URL}/metadata`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(metadata)
-                });
-                console.log('保存元数据成功');
-            } catch (err) {
-                console.error('保存元数据失败:', err);
-            }
+            await fetch(`${WORKER_URL}/metadata`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(metadata)
+            });
         }
-
-        // ======================= 文件夹管理 =======================
+        
+        // ======================= 文件夹导航 =======================
         let currentFolder = '';
         
         function updateUploadPathDisplay() {
-            const el = document.getElementById('uploadPathDisplay');
-            el.innerText = currentFolder ? `/${currentFolder}/` : '/';
+            document.getElementById('uploadPathDisplay').innerText = currentFolder ? `/${currentFolder}/` : '/';
         }
-        
         function updateBreadcrumbNav() {
             const el = document.getElementById('breadcrumbNav');
-            
             if (!currentFolder) {
                 el.innerHTML = '<span class="breadcrumb-item current">根目录</span>';
                 return;
             }
-            
             const parts = currentFolder.split('/');
-            let html = '<span class="breadcrumb-item" onclick="navigateToFolder(\'\')">根目录</span>';
+            let html = '<span class="breadcrumb-item" data-path="">根目录</span>';
             let path = '';
-            
             parts.forEach((part, i) => {
                 path += (i > 0 ? '/' : '') + part;
                 const isLast = (i === parts.length - 1);
                 html += `<span class="breadcrumb-separator">/</span>`;
-                html += `<span class="breadcrumb-item ${isLast ? 'current' : ''}" onclick="navigateToFolder('${path}')">${part}</span>`;
+                html += `<span class="breadcrumb-item ${isLast ? 'current' : ''}" data-path="${esc(path)}">${esc(part)}</span>`;
             });
-            
             el.innerHTML = html;
+            el.querySelectorAll('.breadcrumb-item:not(.current)').forEach(node => {
+                node.onclick = () => navigateToFolder(node.dataset.path);
+            });
         }
-        
         function navigateToFolder(folderPath) {
             currentFolder = folderPath;
             updateBreadcrumbNav();
@@ -503,213 +509,140 @@
         }
         
         async function showNewFolderDialog() {
-            const folderName = await showModal({ 
-                type: 'prompt', 
-                title: '新建文件夹', 
-                message: '请输入文件夹名称：',
-                defaultValue: ''
-            });
-            
+            const folderName = await showModal({ type: 'prompt', title: '新建文件夹', message: '请输入文件夹名称：' });
             if (!folderName || !folderName.trim()) return;
-            
             const trimmedName = folderName.trim();
-            
-            if (trimmedName.includes('/') || trimmedName.includes('\\')) {
-                await showModal({ type: 'alert', title: '错误', message: '文件夹名称不能包含 / 或 \\' });
+            if (trimmedName.includes('/') || trimmedName.includes('\\') || trimmedName.includes(SLASH_TOKEN)) {
+                await showModal({ type: 'alert', title: '错误', message: '文件夹名称不合法' });
                 return;
             }
-            
-            const newFolderPath = currentFolder 
-                ? `${currentFolder}/${trimmedName}`
-                : trimmedName;
-            
+            const newFolderPath = currentFolder ? `${currentFolder}/${trimmedName}` : trimmedName;
             if (metadata.folders.includes(newFolderPath)) {
                 await showModal({ type: 'alert', title: '提示', message: '文件夹已存在！' });
                 return;
             }
-            
             metadata.folders.push(newFolderPath);
             await saveMetadata();
-            
             renderFileList();
         }
-
-        // ======================= 拖拽与多文件队列逻辑 =======================
+        
+        // ======================= 上传 =======================
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
         const uploadQueueEl = document.getElementById('uploadQueue');
         const startUploadBtn = document.getElementById('startUploadBtn');
-
         let uploadQueue = [];
         let isUploading = false;
-
+        
         dropzone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
-
-        dropzone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropzone.classList.add('dragover');
-        });
-        
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
         dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-        
         dropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropzone.classList.remove('dragover');
             addFilesToQueue(e.dataTransfer.files);
         });
-
+        
         function formatBytes(bytes) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-
+        
         function addFilesToQueue(files) {
             if (files.length === 0) return;
-            
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const id = 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-                
-                // 构建完整路径
-                let filePath;
-                if (currentFolder) {
-                    filePath = currentFolder + '/' + file.name;
-                } else {
-                    filePath = file.name;
-                }
-                
-                const task = {
-                    id, 
-                    file, 
-                    filePath,
-                    status: 'pending'
-                };
-                uploadQueue.push(task);
-
+                const filePath = currentFolder ? currentFolder + '/' + file.name : file.name;
+                uploadQueue.push({ id, file, filePath, status: 'pending' });
+        
                 const taskEl = document.createElement('div');
                 taskEl.className = 'task-item';
                 taskEl.id = id;
                 taskEl.innerHTML = `
                     <div class="task-header">
-                        <span class="task-name">${filePath} <span style="color:#888;font-size:12px;">(${formatBytes(file.size)})</span></span>
+                        <span class="task-name">${esc(filePath)} <span style="color:#888;font-size:12px;">(${formatBytes(file.size)})</span></span>
                         <span class="task-meta">
                             <span id="speed_${id}" class="task-status">等待中</span>
                             <span id="percent_${id}" class="task-status">0%</span>
                         </span>
                     </div>
-                    <div class="progress-bg">
-                        <div id="bar_${id}" class="progress-fill"></div>
-                    </div>
+                    <div class="progress-bg"><div id="bar_${id}" class="progress-fill"></div></div>
                 `;
                 uploadQueueEl.appendChild(taskEl);
             }
-            
             fileInput.value = '';
             if (!isUploading) startUploadBtn.style.display = 'block';
         }
-
-        // ======================= 统一传输与切片逻辑 =======================
+        
         startUploadBtn.addEventListener('click', async () => {
             if (uploadQueue.length === 0) return;
             isUploading = true;
             startUploadBtn.style.display = 'none';
             dropzone.style.pointerEvents = 'none';
             dropzone.innerText = "传输中，请勿关闭页面...";
-
+        
             for (let task of uploadQueue) {
-                if (task.status === 'pending') {
-                    await processSingleTask(task);
-                }
+                if (task.status === 'pending') await processSingleTask(task);
             }
-
             isUploading = false;
             dropzone.style.pointerEvents = 'auto';
             dropzone.innerText = "点击选择文件，或将多个文件拖拽到此处";
             uploadQueue = [];
-            
-            await showModal({ type: 'alert', title: '上传完毕', message: '所有队列中的文件均已传输完成！' });
-            setTimeout(() => {
-                uploadQueueEl.innerHTML = '';
-                loadFiles();
-            }, 500);
+            await showModal({ type: 'alert', title: '上传完毕', message: '所有文件已传输完成！' });
+            setTimeout(() => { uploadQueueEl.innerHTML = ''; loadFiles(); }, 500);
         });
-
+        
         async function processSingleTask(task) {
             task.status = 'uploading';
             const speedEl = document.getElementById(`speed_${task.id}`);
             const percentEl = document.getElementById(`percent_${task.id}`);
             const barEl = document.getElementById(`bar_${task.id}`);
-
             speedEl.innerText = "准备中...";
-            barEl.style.width = '0%';
             
             const file = task.file;
-            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            const baseName = task.filePath + '__' + Date.now();
+            const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+            // 🔥 关键：路径里的 / 替换成占位符
+            const baseName = pathToAssetPrefix(task.filePath) + '__' + Date.now();
             
-            let totalUploaded = 0;
             let lastUpdateTime = Date.now();
             let lastUploadedBytes = 0;
             
             function updateProgress(uploadedBytes) {
-                totalUploaded = uploadedBytes;
-                
-                const percent = file.size === 0 ? 100 : Math.min(100, (totalUploaded / file.size * 100));
-                const percentText = percent.toFixed(1);
-                
-                barEl.style.width = percentText + '%';
-                percentEl.innerText = percentText + '%';
-                
+                const percent = file.size === 0 ? 100 : Math.min(100, (uploadedBytes / file.size * 100));
+                barEl.style.width = percent.toFixed(1) + '%';
+                percentEl.innerText = percent.toFixed(1) + '%';
                 const now = Date.now();
-                const timeDiff = now - lastUpdateTime;
-                if (timeDiff >= 300) {
-                    const bytesDiff = totalUploaded - lastUploadedBytes;
-                    const speed = bytesDiff / (timeDiff / 1000);
-                    const mbps = (speed / 1024 / 1024).toFixed(2);
-                    speedEl.innerText = mbps + ' MB/s';
-                    
+                if (now - lastUpdateTime >= 300) {
+                    const speed = (uploadedBytes - lastUploadedBytes) / ((now - lastUpdateTime) / 1000);
+                    speedEl.innerText = (speed / 1024 / 1024).toFixed(2) + ' MB/s';
                     lastUpdateTime = now;
-                    lastUploadedBytes = totalUploaded;
+                    lastUploadedBytes = uploadedBytes;
                 }
             }
-
+        
             function uploadChunk(chunkIndex, start, end) {
                 return new Promise((resolve, reject) => {
                     const chunk = file.slice(start, end);
                     const url = `${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part' + (chunkIndex + 1))}`;
-                    
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', url);
-                    
-                    xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
-                            const currentProgress = start + e.loaded;
-                            updateProgress(currentProgress);
-                        }
-                    };
-                    
+                    xhr.upload.onprogress = (e) => { if (e.lengthComputable) updateProgress(start + e.loaded); };
                     xhr.onload = () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            updateProgress(end);
-                            resolve();
-                        } else {
-                            reject(new Error('HTTP ' + xhr.status));
-                        }
+                        if (xhr.status >= 200 && xhr.status < 300) { updateProgress(end); resolve(); }
+                        else reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText));
                     };
-                    
                     xhr.onerror = () => reject(new Error('网络异常'));
                     xhr.send(chunk);
                 });
             }
-
+        
             try {
                 if (file.size === 0) {
-                    const url = `${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part1')}`;
-                    await fetch(url, { method: 'POST', body: '' });
-                    updateProgress(0);
+                    await fetch(`${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part1')}`, { method: 'POST', body: '' });
                 } else {
                     for (let i = 0; i < totalChunks; i++) {
                         const start = i * CHUNK_SIZE;
@@ -717,14 +650,12 @@
                         await uploadChunk(i, start, end);
                     }
                 }
-
                 task.status = 'done';
                 barEl.classList.add('done');
                 barEl.style.width = '100%';
                 percentEl.innerText = '100%';
                 speedEl.innerText = '已完成';
                 speedEl.style.color = 'var(--success)';
-                
             } catch (err) {
                 console.error('上传失败:', err);
                 task.status = 'error';
@@ -733,21 +664,17 @@
                 speedEl.style.color = 'var(--danger)';
             }
         }
-
-        // ======================= 列表逻辑（重点修复）=======================
-        let globalFiles = {};
+        
+        // ======================= 文件列表 =======================
+        let globalFiles = {};         // key: fullPath（含 /）  value: { fileName, folderPath, timestamp, parts, baseName }
         let selectedFiles = new Set();
         
         async function loadFiles() {
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = "正在同步数据...";
-            
             try {
-                const [assetsResponse] = await Promise.all([
-                    fetch(`${WORKER_URL}/list`),
-                    loadMetadata()
-                ]);
-                
+                await loadMetadata();
+                        const assetsResponse = await fetch(`${WORKER_URL}/list?t=${Date.now()}`);
                 const assets = await assetsResponse.json();
                 
                 globalFiles = {};
@@ -755,46 +682,29 @@
                 updateBatchActions();
                 
                 assets.forEach(asset => {
-                    // 跳过元数据文件
-                    if (asset.name === '##SYSTEM_FOLDER_METADATA##') return;
+                    if (asset.name === METADATA_FILENAME) return;
                     
-                    // 匹配格式：路径/文件名__时间戳.partN
+                    // 匹配 编码后路径__时间戳.partN
                     const match = asset.name.match(/^(.+)__(\d+)\.part(\d+)$/);
                     if (!match) {
-                        console.log('无法解析的文件:', asset.name);
+                        console.log('无法解析:', asset.name);
                         return;
                     }
                     
-                    const fullPath = match[1];  // 完整路径（可能包含文件夹）
+                    const encodedPath = match[1];                // 含 __SLASH__
+                    const fullPath = assetPrefixToPath(encodedPath); // 还原为 a/b/c.txt
                     const timestamp = parseInt(match[2]);
                     const partNum = parseInt(match[3]);
+                    const baseName = encodedPath + '__' + timestamp; // 用于 delete/rename 的 prefix
                     
-                    // 关键：正确分离文件夹路径和文件名
                     const lastSlash = fullPath.lastIndexOf('/');
-                    let folderPath = '';
-                    let fileName = fullPath;
-                    
-                    if (lastSlash !== -1) {
-                        folderPath = fullPath.substring(0, lastSlash);
-                        fileName = fullPath.substring(lastSlash + 1);
-                    }
-                    
-                    console.log('解析文件:', { fullPath, folderPath, fileName, partNum });
+                    const folderPath = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash);
+                    const fileName = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1);
                     
                     if (!globalFiles[fullPath]) {
-                        globalFiles[fullPath] = { 
-                            fileName, 
-                            folderPath,
-                            timestamp, 
-                            parts: [] 
-                        };
+                        globalFiles[fullPath] = { fileName, folderPath, timestamp, baseName, parts: [] };
                     }
-                    
-                    globalFiles[fullPath].parts.push({ 
-                        partNum, 
-                        assetId: asset.id,
-                        size: asset.size
-                    });
+                    globalFiles[fullPath].parts.push({ partNum, assetId: asset.id, size: asset.size });
                 });
                 
                 renderFileList();
@@ -809,227 +719,193 @@
             const listEl = document.getElementById('fileList');
             listEl.innerHTML = "";
             
-            // 获取当前文件夹下的直接子文件夹
+            // === 收集当前目录下的子文件夹 ===
             const folders = new Set();
-            
-            // 从元数据获取文件夹
-            metadata.folders.forEach(folderPath => {
+            const collectChild = (path) => {
                 if (currentFolder === '') {
-                    // 根目录：显示一级文件夹
-                    if (!folderPath.includes('/')) {
-                        folders.add(folderPath);
-                    }
+                    if (path && !path.includes('/')) folders.add(path);
                 } else {
-                    // 子目录：显示当前目录下的直接子文件夹
                     const prefix = currentFolder + '/';
-                    if (folderPath.startsWith(prefix)) {
-                        const relativePath = folderPath.substring(prefix.length);
-                        if (!relativePath.includes('/')) {
-                            folders.add(relativePath);
-                        }
+                    if (path.startsWith(prefix)) {
+                        const rel = path.substring(prefix.length);
+                        if (rel && !rel.includes('/')) folders.add(rel);
                     }
                 }
-            });
+            };
             
-            // 从文件路径推断文件夹（兼容旧数据和未在元数据中的文件夹）
-            for (const [fullPath, fileData] of Object.entries(globalFiles)) {
-                if (currentFolder === '') {
-                    // 根目录：显示有文件夹路径的文件的父文件夹
-                    if (fileData.folderPath && !fileData.folderPath.includes('/')) {
-                        folders.add(fileData.folderPath);
-                    }
-                } else {
-                    // 子目录
-                    const prefix = currentFolder + '/';
-                    if (fileData.folderPath && fileData.folderPath.startsWith(prefix)) {
-                        const relativePath = fileData.folderPath.substring(prefix.length);
-                        if (!relativePath.includes('/')) {
-                            folders.add(relativePath);
-                        }
-                    }
-                }
+            metadata.folders.forEach(collectChild);
+            // 从文件路径推断（容错）
+            for (const fileData of Object.values(globalFiles)) {
+                if (fileData.folderPath) collectChild(fileData.folderPath);
             }
             
-            // 获取当前文件夹下的文件
+            // === 收集当前目录下的文件 ===
             const files = [];
             for (const [fullPath, fileData] of Object.entries(globalFiles)) {
                 fileData.parts.sort((a, b) => a.partNum - b.partNum);
-                
-                // 根目录：显示没有文件夹路径的文件
-                // 子目录：显示文件夹路径匹配当前目录的文件
-                if (currentFolder === '' && !fileData.folderPath) {
-                    files.push({ fullPath, ...fileData });
-                } else if (fileData.folderPath === currentFolder) {
+                if (fileData.folderPath === currentFolder) {
                     files.push({ fullPath, ...fileData });
                 }
             }
             
-            console.log('渲染列表:', { currentFolder, folders: Array.from(folders), files: files.length });
-            
-            // 渲染文件夹
+            // === 渲染文件夹 ===
             Array.from(folders).sort().forEach(folderName => {
                 const folderPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
                 const item = document.createElement('div');
                 item.className = 'folder-item';
-                item.onclick = () => navigateToFolder(folderPath);
                 item.innerHTML = `
                     <div class="folder-icon">
                         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
                     </div>
-                    <span class="folder-name">${folderName}</span>
+                    <span class="folder-name">${esc(folderName)}</span>
                     <span class="folder-meta">文件夹</span>
-                    <button class="icon-btn delete" title="删除" onclick="event.stopPropagation(); deleteFolder('${folderPath}', '${folderName}')" style="margin-left: auto;">
+                    <button class="icon-btn delete" title="删除" style="margin-left: auto;">
                         <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                     </button>
                 `;
+                item.onclick = () => navigateToFolder(folderPath);
+                item.querySelector('.icon-btn.delete').onclick = (e) => {
+                    e.stopPropagation();
+                    deleteFolder(folderPath, folderName);
+                };
                 listEl.appendChild(item);
             });
             
-            // 渲染文件
+            // === 渲染文件 ===
             files.forEach(file => {
-                const timeString = file.timestamp 
-                    ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) 
-                    : '未知时间';
-                
+                const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
+                const domId = safeId(file.fullPath);
                 
-                // 注意：这里显示的是 fileName，不是 fullPath
                 const item = document.createElement('div');
                 item.className = "file-item";
-                item.id = `file_${fullPath}`;
+                item.id = 'file_' + domId;
                 item.innerHTML = `
-                    <input type="checkbox" class="file-checkbox" onchange="toggleFileSelection('${file.fullPath}', this.checked)">
+                    <input type="checkbox" class="file-checkbox">
                     <div class="file-info">
-                        <span class="file-name">${file.fileName}</span>
+                        <span class="file-name">${esc(file.fileName)}</span>
                         <span class="file-meta">${timeString} • ${file.parts.length} 个分块 • ${formatBytes(totalSize)}</span>
                     </div>
                     <div class="file-actions">
-                        <button class="icon-btn" title="下载" onclick="downloadFile('${file.fullPath}', '${file.fileName}')">
+                        <button class="icon-btn" title="下载" data-act="download">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
-                        <button class="icon-btn" title="重命名" onclick="renameFile('${file.fullPath}', '${file.fileName}', '${file.folderPath}')">
+                        <button class="icon-btn" title="重命名" data-act="rename">
                             <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                         </button>
-                        <button class="icon-btn delete" title="删除" onclick="deleteFile('${file.fullPath}', '${file.fileName}')">
+                        <button class="icon-btn delete" title="删除" data-act="delete">
                             <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>
                     </div>
                 `;
+                
+                item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
+                item.querySelector('[data-act="download"]').onclick = () => downloadFile(file.fullPath, file.fileName);
+                item.querySelector('[data-act="rename"]').onclick = () => renameFile(file.fullPath, file.fileName, file.folderPath, file.baseName, file.timestamp);
+                item.querySelector('[data-act="delete"]').onclick = () => deleteFile(file.fullPath, file.fileName, file.baseName);
+                
                 listEl.appendChild(item);
             });
             
-            // 空状态
             if (folders.size === 0 && files.length === 0) {
                 listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
             }
         }
-
-        // ======================= 文件选择逻辑 =======================
+        
+        // ======================= 选择 =======================
         function toggleFileSelection(fullPath, checked) {
-            if (checked) {
-                selectedFiles.add(fullPath);
-            } else {
-                selectedFiles.delete(fullPath);
-            }
-            
-            const item = document.getElementById(`file_${fullPath}`);
-            if (item) {
-                item.classList.toggle('selected', checked);
-            }
-            
+            if (checked) selectedFiles.add(fullPath);
+            else selectedFiles.delete(fullPath);
+            const item = document.getElementById('file_' + safeId(fullPath));
+            if (item) item.classList.toggle('selected', checked);
             updateBatchActions();
         }
-        
         function updateBatchActions() {
-            const batchActionsEl = document.getElementById('batchActions');
-            const selectedCountEl = document.getElementById('selectedCount');
-            
+            const el = document.getElementById('batchActions');
             if (selectedFiles.size > 0) {
-                batchActionsEl.classList.add('show');
-                selectedCountEl.innerText = `已选择 ${selectedFiles.size} 个文件`;
+                el.classList.add('show');
+                document.getElementById('selectedCount').innerText = `已选择 ${selectedFiles.size} 个文件`;
             } else {
-                batchActionsEl.classList.remove('show');
+                el.classList.remove('show');
             }
         }
-
-        // ======================= 下载逻辑 =======================
+        
+        // ======================= 下载 =======================
         async function downloadFile(fullPath, suggestName) {
             const fileData = globalFiles[fullPath];
             if (!fileData) return;
             
             const taskId = 'dl_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
             const totalSize = fileData.parts.reduce((sum, p) => sum + p.size, 0);
-            
-            const task = {
-                id: taskId,
-                displayName: suggestName,
-                totalParts: fileData.parts.length,
-                totalSize,
-                downloadedBytes: 0
-            };
-            
+            const task = { id: taskId, displayName: suggestName, totalParts: fileData.parts.length, totalSize, downloadedBytes: 0 };
             renderDownloadTask(task);
             
             try {
-                const fileHandle = await window.showSaveFilePicker({ suggestedName: suggestName });
-                const writable = await fileHandle.createWritable();
+                let writable;
+                let useFileSystemAPI = !!window.showSaveFilePicker;
+                let chunks = [];
+                
+                if (useFileSystemAPI) {
+                    try {
+                        const fileHandle = await window.showSaveFilePicker({ suggestedName: suggestName });
+                        writable = await fileHandle.createWritable();
+                    } catch (e) {
+                        if (e.name === 'AbortError') {
+                            document.getElementById(taskId)?.remove();
+                            return;
+                        }
+                        useFileSystemAPI = false;
+                    }
+                }
                 
                 let lastUpdate = Date.now();
                 let lastLoaded = 0;
                 
                 for (let i = 0; i < fileData.parts.length; i++) {
                     const part = fileData.parts[i];
-                    
                     const response = await fetch(`${WORKER_URL}/download?id=${part.assetId}`);
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     
                     const reader = response.body.getReader();
-                    
                     try {
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
                             
-                            await writable.write(value);
+                            if (useFileSystemAPI) await writable.write(value);
+                            else chunks.push(value);
                             
                             task.downloadedBytes += value.length;
-                            
                             const now = Date.now();
                             if (now - lastUpdate > 300) {
                                 const speed = (task.downloadedBytes - lastLoaded) / ((now - lastUpdate) / 1000);
-                                const speedText = formatSpeed(speed);
-                                
-                                updateDownloadProgress(
-                                    task, 
-                                    task.downloadedBytes / task.totalSize,
-                                    `分块 ${i + 1}/${task.totalParts} • ${speedText}`
-                                );
-                                
+                                updateDownloadProgress(task, task.downloadedBytes / task.totalSize, `分块 ${i + 1}/${task.totalParts} • ${formatSpeed(speed)}`);
                                 lastUpdate = now;
                                 lastLoaded = task.downloadedBytes;
                             }
                         }
-                    } finally {
-                        reader.releaseLock();
-                    }
+                    } finally { reader.releaseLock(); }
                 }
                 
-                await writable.close();
+                if (useFileSystemAPI) {
+                    await writable.close();
+                } else {
+                    // 降级：用 Blob 触发下载
+                    const blob = new Blob(chunks);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = suggestName;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }
                 
                 updateDownloadProgress(task, 1, '已完成');
                 finishDownloadTask(taskId);
-                
             } catch (err) {
-                if (err.name === 'AbortError') {
-                    document.getElementById(taskId)?.remove();
-                } else {
-                    console.error('下载错误:', err);
-                    updateDownloadProgress(task, task.downloadedBytes / task.totalSize, '失败: ' + err.message, true);
-                    finishDownloadTask(taskId);
-                }
+                console.error('下载错误:', err);
+                updateDownloadProgress(task, task.downloadedBytes / task.totalSize, '失败: ' + err.message, true);
+                finishDownloadTask(taskId);
             }
         }
         
@@ -1040,103 +916,71 @@
             taskEl.id = task.id;
             taskEl.innerHTML = `
                 <div class="task-header">
-                    <span class="task-name">${task.displayName} <span style="color:#888;font-size:12px;">(${formatBytes(task.totalSize)})</span></span>
+                    <span class="task-name">${esc(task.displayName)} <span style="color:#888;font-size:12px;">(${formatBytes(task.totalSize)})</span></span>
                     <span class="task-meta">
                         <span id="dl_speed_${task.id}" class="task-status">准备中...</span>
                         <span id="dl_percent_${task.id}" class="task-status">0%</span>
                     </span>
                 </div>
-                <div class="progress-bg">
-                    <div id="dl_bar_${task.id}" class="progress-fill"></div>
-                </div>
+                <div class="progress-bg"><div id="dl_bar_${task.id}" class="progress-fill"></div></div>
             `;
             queueEl.appendChild(taskEl);
         }
-        
         function updateDownloadProgress(task, progress, statusText, isError = false) {
             const speedEl = document.getElementById(`dl_speed_${task.id}`);
             const percentEl = document.getElementById(`dl_percent_${task.id}`);
             const barEl = document.getElementById(`dl_bar_${task.id}`);
-            
             if (!speedEl || !percentEl || !barEl) return;
-            
             const percent = Math.min(100, (progress * 100)).toFixed(1);
-            
             barEl.style.width = `${percent}%`;
             percentEl.innerText = `${percent}%`;
             speedEl.innerText = statusText;
-            
-            if (isError) {
-                barEl.classList.add('error');
-                speedEl.style.color = 'var(--danger)';
-            }
+            if (isError) { barEl.classList.add('error'); speedEl.style.color = 'var(--danger)'; }
         }
-        
         function finishDownloadTask(taskId) {
             setTimeout(() => {
                 const taskEl = document.getElementById(taskId);
                 if (taskEl) {
                     const barEl = taskEl.querySelector('.progress-fill');
-                    if (barEl && !barEl.classList.contains('error')) {
-                        barEl.classList.add('done');
-                    }
+                    if (barEl && !barEl.classList.contains('error')) barEl.classList.add('done');
                 }
             }, 500);
         }
-        
-        function formatSpeed(bytesPerSecond) {
-            if (bytesPerSecond < 1024) {
-                return bytesPerSecond.toFixed(0) + ' B/s';
-            } else if (bytesPerSecond < 1024 * 1024) {
-                return (bytesPerSecond / 1024).toFixed(2) + ' KB/s';
-            } else {
-                return (bytesPerSecond / 1024 / 1024).toFixed(2) + ' MB/s';
-            }
+        function formatSpeed(bps) {
+            if (bps < 1024) return bps.toFixed(0) + ' B/s';
+            if (bps < 1024 * 1024) return (bps / 1024).toFixed(2) + ' KB/s';
+            return (bps / 1024 / 1024).toFixed(2) + ' MB/s';
         }
-
-        // ======================= 批量下载 =======================
+        
+        // ======================= 批量操作 =======================
         async function batchDownload() {
             if (selectedFiles.size === 0) return;
-            
             const files = Array.from(selectedFiles).map(fullPath => ({
-                fullPath,
-                fileName: globalFiles[fullPath].fileName
+                fullPath, fileName: globalFiles[fullPath].fileName
             }));
-            
             selectedFiles.clear();
             updateBatchActions();
             document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
             document.querySelectorAll('.file-item').forEach(item => item.classList.remove('selected'));
-            
-            for (const file of files) {
-                await downloadFile(file.fullPath, file.fileName);
-            }
+            for (const file of files) await downloadFile(file.fullPath, file.fileName);
         }
-
-        // ======================= 批量删除 =======================
+        
         async function batchDelete() {
             if (selectedFiles.size === 0) return;
-            
             const count = selectedFiles.size;
-            if (!(await showModal({ 
-                type: 'confirm', 
-                title: '确认批量删除', 
-                message: `确定要删除选中的 ${count} 个文件吗？此操作不可恢复！` 
-            }))) return;
+            if (!(await showModal({ type: 'confirm', title: '确认批量删除', message: `确定删除选中的 ${count} 个文件吗？` }))) return;
             
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = `正在删除 ${count} 个文件...`;
-            
             try {
-                const deletePromises = Array.from(selectedFiles).map(fullPath =>
-                    fetch(`${WORKER_URL}/delete?name=${encodeURIComponent(fullPath)}`, { method: 'DELETE' })
-                );
-                
-                await Promise.all(deletePromises);
-                
+                // 🔥 关键：用 baseName（已编码）作为 prefix
+                const tasks = Array.from(selectedFiles).map(fullPath => {
+                    const baseName = globalFiles[fullPath].baseName;
+                    return fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
+                });
+                await Promise.all(tasks);
                 selectedFiles.clear();
                 updateBatchActions();
-                
                 statusEl.innerText = '';
                 loadFiles();
             } catch (err) {
@@ -1144,30 +988,24 @@
                 statusEl.innerText = '批量删除失败';
             }
         }
-
+        
         // ======================= 删除文件夹 =======================
         async function deleteFolder(folderPath, folderName) {
-            if (!(await showModal({ 
-                type: 'confirm', 
-                title: '确认删除文件夹', 
-                message: `确定要删除文件夹 "${folderName}" 及其所有内容吗？此操作不可恢复！` 
-            }))) return;
-            
+            if (!(await showModal({ type: 'confirm', title: '确认删除文件夹', message: `确定删除文件夹 "${folderName}" 及其所有内容？` }))) return;
             const statusEl = document.getElementById('downloadStatus');
             statusEl.innerText = '正在删除文件夹...';
-            
             try {
-                // 删除所有子文件
-                const filesToDelete = Object.keys(globalFiles).filter(fullPath => 
-                    fullPath.startsWith(folderPath + '/')
-                );
+                // 删除该文件夹及子文件夹下的所有文件
+                const tasks = [];
+                for (const [fullPath, fileData] of Object.entries(globalFiles)) {
+                    if (fullPath.startsWith(folderPath + '/') || fileData.folderPath === folderPath || fileData.folderPath.startsWith(folderPath + '/')) {
+                        tasks.push(fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(fileData.baseName)}`, { method: 'DELETE' }));
+                    }
+                }
+                await Promise.all(tasks);
                 
-                await Promise.all(filesToDelete.map(fullPath =>
-                    fetch(`${WORKER_URL}/delete?name=${encodeURIComponent(fullPath)}`, { method: 'DELETE' })
-                ));
-                
-                // 从元数据中删除该文件夹及其子文件夹
-                metadata.folders = metadata.folders.filter(f => !f.startsWith(folderPath) && f !== folderPath);
+                // 元数据里删除该文件夹及子文件夹
+                metadata.folders = metadata.folders.filter(f => f !== folderPath && !f.startsWith(folderPath + '/'));
                 await saveMetadata();
                 
                 statusEl.innerText = '';
@@ -1177,15 +1015,14 @@
                 statusEl.innerText = '删除失败';
             }
         }
-
-        // ======================= 删除文件 =======================
-        async function deleteFile(fullPath, fileName) {
+        
+        // ======================= 删除单个文件 =======================
+        async function deleteFile(fullPath, fileName, baseName) {
             if (!(await showModal({ type: 'confirm', title: '确认删除', message: `彻底删除：${fileName} ？` }))) return;
-            
             document.getElementById('downloadStatus').innerText = '正在删除...';
-            
             try {
-                await fetch(`${WORKER_URL}/delete?name=${encodeURIComponent(fullPath)}`, { method: 'DELETE' });
+                // 🔥 用 baseName（编码后）作为 prefix
+                await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
                 document.getElementById('downloadStatus').innerText = '';
                 loadFiles();
             } catch (e) {
@@ -1193,25 +1030,24 @@
                 document.getElementById('downloadStatus').innerText = '删除失败';
             }
         }
-
-        // ======================= 重命名文件 =======================
-        async function renameFile(oldFullPath, oldFileName, folderPath) {
-            const newName = await showModal({ 
-                type: 'prompt', 
-                title: '重命名', 
-                message: '输入新文件名：', 
-                defaultValue: oldFileName 
-            });
-            
+        
+        // ======================= 重命名 =======================
+        async function renameFile(oldFullPath, oldFileName, folderPath, oldBaseName, timestamp) {
+            const newName = await showModal({ type: 'prompt', title: '重命名', message: '输入新文件名：', defaultValue: oldFileName });
             if (!newName || newName === oldFileName) return;
-            
+            if (newName.includes('/') || newName.includes('\\')) {
+                await showModal({ type: 'alert', title: '错误', message: '文件名不能包含 / 或 \\' });
+                return;
+            }
             document.getElementById('downloadStatus').innerText = '正在重命名...';
-            
             try {
                 const newFullPath = folderPath ? `${folderPath}/${newName}` : newName;
-                await fetch(`${WORKER_URL}/rename?old=${encodeURIComponent(oldFullPath)}&new=${encodeURIComponent(newFullPath)}`, { 
-                    method: 'POST' 
-                });
+                const newBaseName = pathToAssetPrefix(newFullPath) + '__' + timestamp;
+                // 🔥 用编码后的 baseName
+                await fetch(
+                    `${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(oldBaseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, 
+                    { method: 'POST' }
+                );
                 document.getElementById('downloadStatus').innerText = '';
                 loadFiles();
             } catch (e) {
@@ -1225,6 +1061,17 @@
             loadFiles();
             updateUploadPathDisplay();
         };
+
+        window.showNewFolderDialog = showNewFolderDialog;
+        window.loadFiles = loadFiles;
+        window.batchDownload = batchDownload;
+        window.batchDelete = batchDelete;
+        window.navigateToFolder = navigateToFolder;
+        window.deleteFolder = deleteFolder;
+        window.deleteFile = deleteFile;
+        window.renameFile = renameFile;
+        window.downloadFile = downloadFile;
+        window.toggleFileSelection = toggleFileSelection;
     </script>
 </body>
 </html>
