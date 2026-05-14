@@ -138,8 +138,13 @@
                     + 新建文件夹
                 </button>
             </div>
-            <div id="dropzone" class="dropzone">点击选择文件，或将多个文件拖拽到此处</div>
+            <div id="dropzone" class="dropzone">点击选择文件 / 文件夹，或拖拽到此处</div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('fileInput').click()">📄 选择文件</button>
+                <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('folderInput').click()">📁 选择文件夹</button>
+            </div>
             <input type="file" id="fileInput" multiple style="display: none;">
+            <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
             <button id="startUploadBtn" class="btn" style="width: 100%; margin-top: 16px; display: none;">开始统一传输</button>
             <div id="uploadQueue" class="queue-container"></div>
         </div>
@@ -510,16 +515,52 @@
         function initUploadHandlers() {
             const dropzone = document.getElementById('dropzone');
             const fileInput = document.getElementById('fileInput');
+            const folderInput = document.getElementById('folderInput');  // 🆕
             const startUploadBtn = document.getElementById('startUploadBtn');
 
             dropzone.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
+            folderInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));  // 🆕
             dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
             dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-            dropzone.addEventListener('drop', (e) => {
+            dropzone.addEventListener('drop', async (e) => {
                 e.preventDefault();
                 dropzone.classList.remove('dragover');
-                addFilesToQueue(e.dataTransfer.files);
+                
+                const items = e.dataTransfer.items;
+                if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+                    // 支持拖拽文件夹
+                    const files = [];
+                    const traverse = async (entry, path = '') => {
+                        if (entry.isFile) {
+                            const file = await new Promise(res => entry.file(res));
+                            // 模拟 webkitRelativePath
+                            Object.defineProperty(file, 'webkitRelativePath', {
+                                value: path + entry.name
+                            });
+                            files.push(file);
+                        } else if (entry.isDirectory) {
+                            const reader = entry.createReader();
+                            const entries = await new Promise(res => reader.readEntries(res));
+                            for (const sub of entries) {
+                                await traverse(sub, path + entry.name + '/');
+                            }
+                        }
+                    };
+                    
+                    const entries = [];
+                    for (const item of items) {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry) entries.push(entry);
+                    }
+                    for (const entry of entries) {
+                        await traverse(entry);
+                    }
+                    addFilesToQueue(files);
+                } else {
+                    // 回退到普通文件
+                    addFilesToQueue(e.dataTransfer.files);
+                }
             });
 
             startUploadBtn.addEventListener('click', async () => {
@@ -547,11 +588,33 @@
                         const fileInput = document.getElementById('fileInput');
             const startUploadBtn = document.getElementById('startUploadBtn');
 
+            // 🆕 收集所有需要创建的子文件夹
+            const newFolders = new Set();
+
             Array.from(files).forEach(file => {
+                // 🆕 解析相对路径
+                const relPath = file.webkitRelativePath || file.name;
+                const parts = relPath.split('/');
+                const subFolderParts = parts.slice(0, -1); // 去掉文件名
+                
+                // 计算这个文件应该上传到哪个文件夹
+                let targetFolder = currentFolder;
+                if (subFolderParts.length > 0) {
+                    const subPath = subFolderParts.join('/');
+                    targetFolder = currentFolder ? `${currentFolder}/${subPath}` : subPath;
+                    
+                    // 把所有父级路径都加入待创建列表
+                    let acc = currentFolder;
+                    for (const part of subFolderParts) {
+                        acc = acc ? `${acc}/${part}` : part;
+                        newFolders.add(acc);
+                    }
+                }
+                
                 const task = {
                     file, status: 'pending', uploaded: 0, total: file.size,
                     domId: 'task-' + Math.random().toString(36).slice(2, 9),
-                    folder: currentFolder
+                    folder: targetFolder  // 🆕 使用目标文件夹
                 };
                 uploadQueue.push(task);
                 
@@ -560,16 +623,35 @@
                 taskEl.id = task.domId;
                 taskEl.innerHTML = `
                     <div class="task-header">
-                        <span class="task-name">${esc(file.name)}</span>
+                        <span class="task-name">${esc(relPath)}</span>
                         <span class="task-meta">
-                            <span style="color: var(--accent);">→ ${esc(currentFolder ? '/' + currentFolder + '/' : '/')}</span>
+                            <span style="color: var(--accent);">→ ${esc(targetFolder ? '/' + targetFolder + '/' : '/')}</span>
                             <span class="task-status">等待中</span>
                         </span>
                     </div>
                     <div class="progress-bg"><div class="progress-fill"></div></div>
                 `;
-                uploadQueueEl.appendChild(taskEl);
+                document.getElementById('uploadQueue').appendChild(taskEl);
             });
+
+            // 🆕 创建所有新文件夹到 metadata
+            if (newFolders.size > 0) {
+                let metadataChanged = false;
+                for (const folder of newFolders) {
+                    if (!metadata.folders.includes(folder)) {
+                        metadata.folders.push(folder);
+                        metadataChanged = true;
+                    }
+                }
+                if (metadataChanged) {
+                    saveMetadata().catch(console.error);
+                }
+            }
+
+            fileInput.value = '';
+            folderInput.value = '';  // 🆕
+            startUploadBtn.style.display = 'block';
+            startUploadBtn.innerText = `开始统一传输 (${uploadQueue.length} 个文件)`;
 
             fileInput.value = '';
             startUploadBtn.style.display = 'block';
