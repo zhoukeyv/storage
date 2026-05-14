@@ -16,398 +16,156 @@
             --border: #333;
             --success: #10b981;
         }
-
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background: var(--bg-color); 
-            color: var(--text-main); 
-            max-width: 900px; 
-            margin: 40px auto; 
-            padding: 20px; 
-        }
-        
-        h1 { font-weight: 500; margin-bottom: 30px; letter-spacing: 1px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); color: var(--text-main); max-width: 900px; margin: 40px auto; padding: 20px; }
+        h1 { font-weight: 500; margin-bottom: 30px; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
         h3 { font-weight: 500; font-size: 16px; margin-top: 0; margin-bottom: 16px; color: #fff; }
-        
-        .box { 
-            background: var(--box-bg); 
-            padding: 24px; 
-            border-radius: 8px; 
-            margin-bottom: 24px; 
-            border: 1px solid var(--border); 
-        }
-        
-        button, .btn { 
-            background: var(--accent); 
-            color: white; 
-            border: none; 
-            padding: 8px 16px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-size: 14px; 
-            transition: background 0.2s; 
-        }
-        
+        .box { background: var(--box-bg); padding: 24px; border-radius: 8px; margin-bottom: 24px; border: 1px solid var(--border); }
+        button, .btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
         button:hover { background: var(--accent-hover); }
         button:disabled { background: #555; cursor: not-allowed; }
         .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
         .btn-secondary:hover { background: rgba(255,255,255,0.05); }
         .btn-danger { background: var(--danger); }
         .btn-danger:hover { background: #dc2626; }
-        
-        .dropzone { 
-            border: 2px dashed var(--border); 
-            border-radius: 8px; 
-            padding: 40px 20px; 
-            text-align: center; 
-            color: var(--text-muted); 
-            cursor: pointer; 
-            transition: all 0.2s; 
-            background: rgba(255,255,255,0.02); 
-        }
-        
-        .dropzone:hover, .dropzone.dragover { 
-            border-color: var(--accent); 
-            background: rgba(59, 130, 246, 0.05); 
-            color: var(--accent); 
-        }
-        
-        .queue-container { 
-            margin-top: 16px; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 10px; 
-        }
-        
-        .task-item { 
-            background: var(--item-bg); 
-            padding: 12px 16px; 
-            border-radius: 6px; 
-            border: 1px solid var(--border); 
-            display: flex; 
-            flex-direction: column; 
-            gap: 8px; 
-        }
-        
-        .task-header { 
-            display: flex; 
-            justify-content: space-between; 
-            font-size: 14px; 
-        }
-        
+        .dropzone { border: 2px dashed var(--border); border-radius: 8px; padding: 40px 20px; text-align: center; color: var(--text-muted); cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); }
+        .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); color: var(--accent); }
+        .queue-container { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .task-item { background: var(--item-bg); padding: 12px 16px; border-radius: 6px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+        .task-header { display: flex; justify-content: space-between; font-size: 14px; }
         .task-name { font-weight: 500; word-break: break-all; }
         .task-meta { color: var(--text-muted); font-size: 13px; display: flex; gap: 12px; }
         .task-status { font-variant-numeric: tabular-nums; }
-        
-        .progress-bg { 
-            width: 100%; 
-            height: 6px; 
-            background: #111; 
-            border-radius: 3px; 
-            overflow: hidden; 
-        }
-        
-        .progress-fill { 
-            height: 100%; 
-            background: var(--accent); 
-            width: 0%; 
-            transition: width 0.15s ease-out; 
-        }
-        
+        .progress-bg { width: 100%; height: 6px; background: #111; border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s ease-out; }
         .progress-fill.done { background: var(--success); }
         .progress-fill.error { background: var(--danger); }
-
-        .upload-path-selector {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-            padding: 10px;
-            background: rgba(255,255,255,0.02);
-            border-radius: 6px;
-            flex-wrap: wrap;
-        }
-        
-        .upload-path-selector label {
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-        
-        .path-display {
-            font-size: 14px;
-            color: var(--accent);
-            font-weight: 500;
-            padding: 4px 8px;
-            background: rgba(59, 130, 246, 0.1);
-            border-radius: 4px;
-        }
-
-        .list-header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-bottom: 16px; 
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .folder-item {
-            display: flex;
-            align-items: center;
-            background: var(--item-bg);
-            padding: 16px;
-            margin-bottom: 10px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .folder-item:hover { 
-            border-color: #555; 
-            background: rgba(255,255,255,0.03);
-        }
-        
-        .folder-icon {
-            margin-right: 12px;
-            color: #fbbf24;
-        }
-        
-        .folder-name {
-            font-size: 15px;
-            font-weight: 500;
-        }
-        
-        .folder-meta {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-left: 12px;
-        }
-        
-        .file-item { 
-            display: flex; 
-            align-items: center; 
-            background: var(--item-bg); 
-            padding: 16px; 
-            margin-bottom: 10px; 
-            border-radius: 6px; 
-            border: 1px solid var(--border); 
-            transition: border-color 0.2s; 
-        }
-        
+        .upload-path-selector { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 6px; flex-wrap: wrap; }
+        .upload-path-selector label { color: var(--text-muted); font-size: 14px; }
+        .path-display { font-size: 14px; color: var(--accent); font-weight: 500; padding: 4px 8px; background: rgba(59, 130, 246, 0.1); border-radius: 4px; }
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .folder-item { display: flex; align-items: center; background: var(--item-bg); padding: 16px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+        .folder-item:hover { border-color: #555; background: rgba(255,255,255,0.03); }
+        .folder-icon { margin-right: 12px; color: #fbbf24; }
+        .folder-name { font-size: 15px; font-weight: 500; }
+        .folder-meta { font-size: 12px; color: var(--text-muted); margin-left: 12px; }
+        .file-item { display: flex; align-items: center; background: var(--item-bg); padding: 16px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); transition: border-color 0.2s; }
         .file-item:hover { border-color: #555; }
         .file-item.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); }
-        
-        .file-checkbox {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            margin-right: 14px;
-            border: 1.5px solid #555;
-            border-radius: 4px;
-            background: transparent;
-            cursor: pointer;
-            position: relative;
-            transition: all 0.15s ease;
-            flex-shrink: 0;
-        }
-
-        .file-checkbox:hover {
-            border-color: var(--accent);
-        }
-
-        .file-checkbox:checked {
-            background: var(--accent);
-            border-color: var(--accent);
-        }
-
-        .file-checkbox:checked::after {
-            content: '';
-            position: absolute;
-            left: 5px;
-            top: 1px;
-            width: 5px;
-            height: 10px;
-            border: solid white;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-        }
-        
+        .file-checkbox { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin-right: 14px; border: 1.5px solid #555; border-radius: 4px; background: transparent; cursor: pointer; position: relative; transition: all 0.15s ease; flex-shrink: 0; }
+        .file-checkbox:hover { border-color: var(--accent); }
+        .file-checkbox:checked { background: var(--accent); border-color: var(--accent); }
+        .file-checkbox:checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
         .file-info { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
         .file-name { font-size: 15px; font-weight: 500; word-break: break-all; }
         .file-meta { font-size: 12px; color: var(--text-muted); }
-        
         .file-actions { display: flex; gap: 8px; flex-shrink: 0; }
-        
-        .icon-btn { 
-            background: transparent; 
-            padding: 8px; 
-            border-radius: 6px; 
-            color: var(--text-muted); 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-        }
-        
+        .icon-btn { background: transparent; padding: 8px; border-radius: 6px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
         .icon-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .icon-btn.delete:hover { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-        
         svg { width: 18px; height: 18px; fill: currentColor; }
         .status { color: var(--text-muted); font-size: 13px; }
-
-        .batch-actions {
-            display: none;
-            gap: 10px;
-            margin-bottom: 16px;
-            padding: 12px;
-            background: rgba(59, 130, 246, 0.1);
-            border-radius: 6px;
-            border: 1px solid var(--accent);
-        }
-        
-        .batch-actions.show {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-        }
-
-        .breadcrumb-nav {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            padding: 10px;
-            background: rgba(255,255,255,0.02);
-            border-radius: 6px;
-            font-size: 14px;
-            flex-wrap: wrap;
-        }
-        
-        .breadcrumb-item {
-            color: var(--accent);
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        
-        .breadcrumb-item:hover {
-            opacity: 0.8;
-            text-decoration: underline;
-        }
-        
-        .breadcrumb-item.current {
-            color: var(--text-main);
-            cursor: default;
-        }
-        
-        .breadcrumb-item.current:hover {
-            opacity: 1;
-            text-decoration: none;
-        }
-        
-        .breadcrumb-separator {
-            color: var(--text-muted);
-        }
-
-        .modal-overlay { 
-            position: fixed; 
-            top: 0; left: 0; right: 0; bottom: 0; 
-            background: rgba(0,0,0,0.6); 
-            backdrop-filter: blur(2px); 
-            display: none; 
-            justify-content: center; 
-            align-items: center; 
-            z-index: 1000; 
-        }
-        
-        .modal-box { 
-            background: var(--box-bg); 
-            padding: 24px; 
-            border-radius: 8px; 
-            width: 380px; 
-            border: 1px solid var(--border); 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
-        }
-        
+        .batch-actions { display: none; gap: 10px; margin-bottom: 16px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; border: 1px solid var(--accent); }
+        .batch-actions.show { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .breadcrumb-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 14px; flex-wrap: wrap; }
+        .breadcrumb-item { color: var(--accent); cursor: pointer; transition: opacity 0.2s; }
+        .breadcrumb-item:hover { opacity: 0.8; text-decoration: underline; }
+        .breadcrumb-item.current { color: var(--text-main); cursor: default; }
+        .breadcrumb-item.current:hover { opacity: 1; text-decoration: none; }
+        .breadcrumb-separator { color: var(--text-muted); }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-box { background: var(--box-bg); padding: 24px; border-radius: 8px; width: 380px; border: 1px solid var(--border); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-        .modal-message { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: break-all; }
-        
-        .modal-input { 
-            width: 100%; 
-            box-sizing: border-box; 
-            background: var(--bg-color); 
-            border: 1px solid var(--border); 
-            color: #fff; 
-            padding: 10px; 
-            border-radius: 6px; 
-            margin-bottom: 20px; 
-            outline: none; 
-        }
-        
+        .modal-message { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; word-break: break-all; white-space: pre-wrap; }
+        .modal-input { width: 100%; box-sizing: border-box; background: var(--bg-color); border: 1px solid var(--border); color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 20px; outline: none; }
         .modal-input:focus { border-color: var(--accent); }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
+        .empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
+
+        /* 登录界面 */
+        .login-screen {
+            position: fixed; inset: 0; background: var(--bg-color); z-index: 10000;
+            display: flex; justify-content: center; align-items: center;
         }
+        .login-screen .box { width: 380px; max-width: 90%; }
+        .login-row { margin-bottom: 16px; }
+        .login-row label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 13px; }
+        .login-row input { width: 100%; box-sizing: border-box; background: var(--bg-color); border: 1px solid var(--border); color: #fff; padding: 10px; border-radius: 6px; outline: none; }
+        .login-row input:focus { border-color: var(--accent); }
+        .login-code-row { display: flex; gap: 8px; }
+        .login-code-row input { flex: 1; }
+        .login-msg { margin-top: 12px; font-size: 13px; min-height: 20px; }
     </style>
 </head>
 <body>
-    <h1>Storage</h1>
 
-    <!-- 拖拽上传区 -->
-    <div class="box">
-        <h3>上传文件</h3>
-        
-        <div class="upload-path-selector">
-            <label>上传到：</label>
-            <div id="uploadPathDisplay" class="path-display">/</div>
-            <button class="btn-secondary" style="padding: 4px 12px; font-size: 13px;" onclick="showNewFolderDialog()">
-                + 新建文件夹
-            </button>
+    <!-- 登录界面 -->
+    <div id="loginScreen" class="login-screen" style="display: none;">
+        <div class="box">
+            <h3>🔐 登录 Storage</h3>
+            <div class="login-row">
+                <label>邮箱</label>
+                <input id="loginEmail" type="email" placeholder="your@email.com">
+            </div>
+            <div class="login-row">
+                <label>验证码</label>
+                <div class="login-code-row">
+                    <input id="loginCode" type="text" placeholder="6 位数字" maxlength="6">
+                    <button id="sendCodeBtn" class="btn-secondary" style="white-space: nowrap;">发送</button>
+                </div>
+            </div>
+            <button id="loginBtn" class="btn" style="width: 100%;">登 录</button>
+            <div id="loginMsg" class="login-msg"></div>
         </div>
-        
-        <div id="dropzone" class="dropzone">
-            点击选择文件，或将多个文件拖拽到此处
-        </div>
-        <input type="file" id="fileInput" multiple style="display: none;">
-        
-        <button id="startUploadBtn" class="btn" style="width: 100%; margin-top: 16px; display: none;">
-            开始统一传输
-        </button>
-        
-        <div id="uploadQueue" class="queue-container"></div>
     </div>
 
-    <!-- 云端文件区 -->
-    <div class="box">
-        <div class="list-header">
-            <h3 style="margin: 0;">云端文件</h3>
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <span id="downloadStatus" class="status"></span>
-                <button class="btn-secondary" onclick="showNewFolderDialog()">新建文件夹</button>
-                <button class="btn-secondary" onclick="loadFiles()">刷新</button>
+    <!-- 主界面 -->
+    <div id="mainApp" style="display: none;">
+        <h1>
+            <span>Storage</span>
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: normal;">
+                <span id="currentUser"></span>
+                <button class="btn-secondary" onclick="logout()" style="margin-left: 12px; font-size: 13px; padding: 4px 12px;">退出</button>
+            </span>
+        </h1>
+
+        <!-- 上传 -->
+        <div class="box">
+            <h3>上传文件</h3>
+            <div class="upload-path-selector">
+                <label>上传到：</label>
+                <div id="uploadPathDisplay" class="path-display">/</div>
+                <button class="btn-secondary" style="padding: 4px 12px; font-size: 13px;" onclick="showNewFolderDialog()">
+                    + 新建文件夹
+                </button>
             </div>
+            <div id="dropzone" class="dropzone">点击选择文件，或将多个文件拖拽到此处</div>
+            <input type="file" id="fileInput" multiple style="display: none;">
+            <button id="startUploadBtn" class="btn" style="width: 100%; margin-top: 16px; display: none;">开始统一传输</button>
+            <div id="uploadQueue" class="queue-container"></div>
         </div>
-        
-        <!-- 面包屑导航 -->
-        <div id="breadcrumbNav" class="breadcrumb-nav">
-            <span class="breadcrumb-item current">根目录</span>
-        </div>
-        
-        <!-- 批量操作栏 -->
-        <div id="batchActions" class="batch-actions">
-            <span id="selectedCount">已选择 0 个文件</span>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn" onclick="batchDownload()">批量下载</button>
-                <button class="btn-danger" onclick="batchDelete()">批量删除</button>
+
+        <!-- 文件列表 -->
+        <div class="box">
+            <div class="list-header">
+                <h3 style="margin: 0;">云端文件</h3>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <span id="downloadStatus" class="status"></span>
+                    <button class="btn-secondary" onclick="showNewFolderDialog()">新建文件夹</button>
+                    <button class="btn-secondary" onclick="loadFiles()">刷新</button>
+                </div>
             </div>
+            <div id="breadcrumbNav" class="breadcrumb-nav">
+                <span class="breadcrumb-item current">根目录</span>
+            </div>
+            <div id="batchActions" class="batch-actions">
+                <span id="selectedCount">已选择 0 个文件</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" onclick="batchDownload()">批量下载</button>
+                    <button class="btn-danger" onclick="batchDelete()">批量删除</button>
+                </div>
+            </div>
+            <div id="fileList"></div>
         </div>
-        
-        <div id="fileList"></div>
     </div>
 
     <!-- 弹窗 -->
@@ -428,8 +186,140 @@
         const CHUNK_SIZE = 20 * 1024 * 1024;
         const METADATA_FILENAME = 'SYSTEM_FOLDER_METADATA';
 
-        // ======================= Base64 编解码（URL-safe）=======================
-        // 🔥 关键：避开 GitHub Asset 文件名限制
+        // ======================= 鉴权 =======================
+        let authToken = localStorage.getItem('authToken') || '';
+        let currentEmail = '';
+
+        const _fetch = window.fetch.bind(window);
+        window.fetch = function(url, options = {}) {
+            if (typeof url === 'string' && url.startsWith(WORKER_URL) && authToken) {
+                options.headers = options.headers || {};
+                if (!options.headers['Authorization']) {
+                    options.headers['Authorization'] = `Bearer ${authToken}`;
+                }
+            }
+            return _fetch(url, options);
+        };
+
+        async function checkLogin() {
+            if (!authToken) return false;
+            try {
+                const resp = await _fetch(`${WORKER_URL}/auth/check`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!resp.ok) return false;
+                const data = await resp.json();
+                if (data.loggedIn) {
+                    currentEmail = data.email;
+                    document.getElementById('currentUser').innerText = data.email;
+                    return true;
+                }
+                return false;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+        }
+        function hideLogin() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+        }
+
+        async function sendLoginCode() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const msgEl = document.getElementById('loginMsg');
+            const btn = document.getElementById('sendCodeBtn');
+            if (!email) { msgEl.innerText = '请输入邮箱'; msgEl.style.color = 'var(--danger)'; return; }
+            
+            btn.disabled = true;
+            msgEl.innerText = '发送中...';
+            msgEl.style.color = 'var(--text-muted)';
+            
+            try {
+                const resp = await _fetch(`${WORKER_URL}/auth/send-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || '发送失败');
+                msgEl.innerText = '✅ 验证码已发送到邮箱（请检查收件箱/垃圾箱）';
+                msgEl.style.color = 'var(--success)';
+                
+                let countdown = 60;
+                btn.innerText = `${countdown}s`;
+                const timer = setInterval(() => {
+                    countdown--;
+                    if (countdown < 0) {
+                        clearInterval(timer);
+                        btn.innerText = '发送';
+                        btn.disabled = false;
+                    } else {
+                        btn.innerText = `${countdown}s`;
+                    }
+                }, 1000);
+            } catch (e) {
+                msgEl.innerText = '❌ ' + e.message;
+                msgEl.style.color = 'var(--danger)';
+                btn.disabled = false;
+            }
+        }
+
+        async function doLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const code = document.getElementById('loginCode').value.trim();
+            const msgEl = document.getElementById('loginMsg');
+            if (!email || !code) { msgEl.innerText = '请填写邮箱和验证码'; msgEl.style.color = 'var(--danger)'; return; }
+            
+            msgEl.innerText = '登录中...';
+            msgEl.style.color = 'var(--text-muted)';
+            
+            try {
+                const resp = await _fetch(`${WORKER_URL}/auth/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || '登录失败');
+                
+                authToken = data.token;
+                currentEmail = data.email;
+                localStorage.setItem('authToken', authToken);
+                msgEl.innerText = '✅ 登录成功';
+                msgEl.style.color = 'var(--success)';
+                
+                setTimeout(() => {
+                    document.getElementById('currentUser').innerText = data.email;
+                    hideLogin();
+                    loadFiles();
+                    updateUploadPathDisplay();
+                }, 500);
+            } catch (e) {
+                msgEl.innerText = '❌ ' + e.message;
+                msgEl.style.color = 'var(--danger)';
+            }
+        }
+
+        async function logout() {
+            try {
+                await _fetch(`${WORKER_URL}/auth/logout`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+            } catch (e) {}
+            authToken = '';
+            localStorage.removeItem('authToken');
+            location.reload();
+        }
+
+        window.logout = logout;
+
+        // ======================= 工具函数 =======================
         function encodeBaseName(str) {
             const utf8 = new TextEncoder().encode(str);
             let bin = '';
@@ -444,8 +334,6 @@
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
             return new TextDecoder().decode(bytes);
         }
-
-        // HTML 转义
         function esc(s) {
             return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
@@ -454,8 +342,14 @@
             for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
             return 'f' + Math.abs(h).toString(36);
         }
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
 
-        // ======================= 弹窗 =======================
+        // ======================= 弹窗 / Toast =======================
         function showModal({ type, title, message, defaultValue = '' }) {
             return new Promise((resolve) => {
                 const overlay = document.getElementById('customModal');
@@ -485,6 +379,47 @@
                 };
             });
         }
+
+        function showToast(msg) {
+            let toast = document.getElementById('__toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = '__toast';
+                toast.style.cssText = `
+                    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+                    background: rgba(0,0,0,0.85); color: #fff; padding: 12px 24px;
+                    border-radius: 6px; font-size: 14px; z-index: 9999;
+                    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+                    border: 1px solid #333;
+                `;
+                document.body.appendChild(toast);
+            }
+            toast.innerText = msg;
+            toast.style.opacity = '1';
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+        }
+
+        // ======================= 链接 =======================
+        function getFileLink(baseName, fileName, mode) {
+            let link = `${WORKER_URL}/dl/${baseName}/${encodeURIComponent(fileName)}`;
+            if (mode === 'download') link += '?download=1';
+            return link;
+        }
+        function openFileLink(baseName, fileName, mode) {
+            window.open(getFileLink(baseName, fileName, mode), '_blank');
+        }
+        async function copyFileLink(baseName, fileName, mode) {
+            const link = getFileLink(baseName, fileName, mode);
+            try {
+                await navigator.clipboard.writeText(link);
+                showToast(mode === 'preview' ? '✅ 预览链接已复制' : '✅ 下载链接已复制');
+            } catch (e) {
+                await showModal({ type: 'alert', title: '链接（请手动复制）', message: link });
+            }
+        }
+        window.openFileLink = openFileLink;
+        window.copyFileLink = copyFileLink;
 
         // ======================= 元数据 =======================
         let metadata = { folders: [] };
@@ -559,144 +494,146 @@
         }
 
         // ======================= 上传 =======================
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('fileInput');
-        const uploadQueueEl = document.getElementById('uploadQueue');
-        const startUploadBtn = document.getElementById('startUploadBtn');
         let uploadQueue = [];
         let isUploading = false;
 
-        dropzone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
-        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
-        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-        dropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('dragover');
-            addFilesToQueue(e.dataTransfer.files);
-        });
+        function initUploadHandlers() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+            const startUploadBtn = document.getElementById('startUploadBtn');
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            dropzone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
+            dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+            dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                addFilesToQueue(e.dataTransfer.files);
+            });
+
+            startUploadBtn.addEventListener('click', async () => {
+                if (uploadQueue.length === 0) return;
+                isUploading = true;
+                startUploadBtn.style.display = 'none';
+                dropzone.style.pointerEvents = 'none';
+                dropzone.innerText = "传输中，请勿关闭页面...";
+
+                for (let task of uploadQueue) {
+                    if (task.status === 'pending') await processSingleTask(task);
+                }
+                isUploading = false;
+                dropzone.style.pointerEvents = 'auto';
+                dropzone.innerText = "点击选择文件，或将多个文件拖拽到此处";
+                uploadQueue = [];
+                await showModal({ type: 'alert', title: '上传完毕', message: '所有文件已传输完成！' });
+                setTimeout(() => { document.getElementById('uploadQueue').innerHTML = ''; loadFiles(); }, 500);
+            });
         }
 
         function addFilesToQueue(files) {
             if (files.length === 0) return;
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const id = 'task_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-                const filePath = currentFolder ? currentFolder + '/' + file.name : file.name;
-                uploadQueue.push({ id, file, filePath, status: 'pending' });
+            const uploadQueueEl = document.getElementById('uploadQueue');
+                        const fileInput = document.getElementById('fileInput');
+            const startUploadBtn = document.getElementById('startUploadBtn');
 
+            Array.from(files).forEach(file => {
+                const task = {
+                    file, status: 'pending', uploaded: 0, total: file.size,
+                    domId: 'task-' + Math.random().toString(36).slice(2, 9),
+                    folder: currentFolder
+                };
+                uploadQueue.push(task);
+                
                 const taskEl = document.createElement('div');
                 taskEl.className = 'task-item';
-                taskEl.id = id;
+                taskEl.id = task.domId;
                 taskEl.innerHTML = `
                     <div class="task-header">
-                        <span class="task-name">${esc(filePath)} <span style="color:#888;font-size:12px;">(${formatBytes(file.size)})</span></span>
+                        <span class="task-name">${esc(file.name)}</span>
                         <span class="task-meta">
-                            <span id="speed_${id}" class="task-status">等待中</span>
-                            <span id="percent_${id}" class="task-status">0%</span>
+                            <span style="color: var(--accent);">→ ${esc(currentFolder ? '/' + currentFolder + '/' : '/')}</span>
+                            <span class="task-status">等待中</span>
                         </span>
                     </div>
-                    <div class="progress-bg"><div id="bar_${id}" class="progress-fill"></div></div>
+                    <div class="progress-bg"><div class="progress-fill"></div></div>
                 `;
                 uploadQueueEl.appendChild(taskEl);
-            }
+            });
+
             fileInput.value = '';
-            if (!isUploading) startUploadBtn.style.display = 'block';
+            startUploadBtn.style.display = 'block';
+            startUploadBtn.innerText = `开始统一传输 (${uploadQueue.length} 个文件)`;
         }
 
-        startUploadBtn.addEventListener('click', async () => {
-            if (uploadQueue.length === 0) return;
-            isUploading = true;
-            startUploadBtn.style.display = 'none';
-            dropzone.style.pointerEvents = 'none';
-            dropzone.innerText = "传输中，请勿关闭页面...";
-
-            for (let task of uploadQueue) {
-                if (task.status === 'pending') await processSingleTask(task);
-            }
-            isUploading = false;
-            dropzone.style.pointerEvents = 'auto';
-            dropzone.innerText = "点击选择文件，或将多个文件拖拽到此处";
-            uploadQueue = [];
-            await showModal({ type: 'alert', title: '上传完毕', message: '所有文件已传输完成！' });
-            setTimeout(() => { uploadQueueEl.innerHTML = ''; loadFiles(); }, 500);
-        });
+        function updateTaskUI(task, statusText, isError = false, isDone = false) {
+            const el = document.getElementById(task.domId);
+            if (!el) return;
+            const percent = task.total > 0 ? (task.uploaded / task.total) * 100 : 0;
+            const fill = el.querySelector('.progress-fill');
+            fill.style.width = percent + '%';
+            fill.classList.toggle('done', isDone);
+            fill.classList.toggle('error', isError);
+            el.querySelector('.task-status').innerText = statusText;
+        }
 
         async function processSingleTask(task) {
-            task.status = 'uploading';
-            const speedEl = document.getElementById(`speed_${task.id}`);
-            const percentEl = document.getElementById(`percent_${task.id}`);
-            const barEl = document.getElementById(`bar_${task.id}`);
-            speedEl.innerText = "准备中...";
-            
             const file = task.file;
-            const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+            const timestamp = Date.now();
+            const folderPrefix = task.folder ? task.folder.replace(/\//g, '__') + '___' : '';
+            const baseName = `F_${folderPrefix}${encodeBaseName(file.name)}_${timestamp}`;
             
-            // 🔥 关键：用 Base64 编码整个 (路径|时间戳)，GitHub 完全不会改它
-            const rawBaseName = task.filePath + '|' + Date.now();
-            const baseName = 'F_' + encodeBaseName(rawBaseName);
-            
-            let lastUpdateTime = Date.now();
-            let lastUploadedBytes = 0;
-            
-            function updateProgress(uploadedBytes) {
-                const percent = file.size === 0 ? 100 : Math.min(100, (uploadedBytes / file.size * 100));
-                barEl.style.width = percent.toFixed(1) + '%';
-                percentEl.innerText = percent.toFixed(1) + '%';
-                const now = Date.now();
-                if (now - lastUpdateTime >= 300) {
-                    const speed = (uploadedBytes - lastUploadedBytes) / ((now - lastUpdateTime) / 1000);
-                    speedEl.innerText = (speed / 1024 / 1024).toFixed(2) + ' MB/s';
-                    lastUpdateTime = now;
-                    lastUploadedBytes = uploadedBytes;
-                }
-            }
-
-            function uploadChunk(chunkIndex, start, end) {
-                return new Promise((resolve, reject) => {
-                    const chunk = file.slice(start, end);
-                    const url = `${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part' + (chunkIndex + 1))}`;
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', url);
-                    xhr.upload.onprogress = (e) => { if (e.lengthComputable) updateProgress(start + e.loaded); };
-                    xhr.onload = () => {
-                        if (xhr.status >= 200 && xhr.status < 300) { updateProgress(end); resolve(); }
-                        else reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText));
-                    };
-                    xhr.onerror = () => reject(new Error('网络异常'));
-                    xhr.send(chunk);
-                });
-            }
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            task.uploaded = 0;
+            updateTaskUI(task, `准备分块... (共 ${totalChunks} 块)`);
 
             try {
-                if (file.size === 0) {
-                    await fetch(`${WORKER_URL}/upload?name=${encodeURIComponent(baseName + '.part1')}`, { method: 'POST', body: '' });
-                } else {
-                    for (let i = 0; i < totalChunks; i++) {
-                        const start = i * CHUNK_SIZE;
-                        const end = Math.min(start + CHUNK_SIZE, file.size);
-                        await uploadChunk(i, start, end);
-                    }
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end);
+                    const partName = `${baseName}.part${i + 1}`;
+                    
+                    await uploadChunkWithProgress(task, chunk, partName, i + 1, totalChunks);
                 }
+                updateTaskUI(task, `✅ 完成`, false, true);
                 task.status = 'done';
-                barEl.classList.add('done');
-                barEl.style.width = '100%';
-                percentEl.innerText = '100%';
-                speedEl.innerText = '已完成';
-                speedEl.style.color = 'var(--success)';
             } catch (err) {
-                console.error('上传失败:', err);
+                console.error("Upload failed:", err);
+                updateTaskUI(task, `❌ 失败: ${err.message}`, true, false);
                 task.status = 'error';
-                barEl.classList.add('error');
-                speedEl.innerText = '失败: ' + err.message;
-                speedEl.style.color = 'var(--danger)';
             }
+        }
+
+        function uploadChunkWithProgress(task, chunk, partName, chunkIndex, totalChunks) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const startBytesUploaded = task.uploaded;
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        task.uploaded = startBytesUploaded + e.loaded;
+                        const percent = ((task.uploaded / task.total) * 100).toFixed(1);
+                        updateTaskUI(task, `${percent}% (块 ${chunkIndex}/${totalChunks})`);
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        task.uploaded = startBytesUploaded + chunk.size;
+                        resolve();
+                    } else {
+                        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText.substring(0,100)}`));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('网络错误'));
+                xhr.onabort = () => reject(new Error('已取消'));
+
+                xhr.open('POST', `${WORKER_URL}/upload?name=${encodeURIComponent(partName)}`);
+                if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                xhr.send(chunk);
+            });
         }
 
         // ======================= 文件列表 =======================
@@ -704,121 +641,140 @@
         let selectedFiles = new Set();
 
         async function loadFiles() {
-            const statusEl = document.getElementById('downloadStatus');
-            statusEl.innerText = "正在同步数据...";
+            const listEl = document.getElementById('fileList');
+            listEl.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
                 await loadMetadata();
-                const assetsResponse = await fetch(`${WORKER_URL}/list?t=${Date.now()}`);
-                const assets = await assetsResponse.json();
+                const response = await fetch(`${WORKER_URL}/list?t=${Date.now()}`);
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        showLogin();
+                        return;
+                    }
+                    throw new Error('加载失败');
+                }
+                const assets = await response.json();
                 
                 globalFiles = {};
-                selectedFiles.clear();
-                updateBatchActions();
-                
                 assets.forEach(asset => {
                     if (asset.name === METADATA_FILENAME) return;
+                    if (!asset.name.startsWith('F_')) return;
                     
-                    // 🔥 匹配 F_xxxxx.partN
-                    const match = asset.name.match(/^(F_[A-Za-z0-9_-]+)\.part(\d+)$/);
-                    if (!match) {
-                        console.log('无法解析:', asset.name);
-                        return;
+                    const m = asset.name.match(/^(F_.+)\.part(\d+)$/);
+                    if (!m) return;
+                    const baseName = m[1];
+                    const partNum = parseInt(m[2]);
+                    
+                    // 解析 F_<folderEncoded>___<nameEncoded>_<timestamp>
+                    // 或 F_<nameEncoded>_<timestamp>
+                    let folderPath = '';
+                    let nameEncoded = '';
+                    let timestamp = 0;
+                    
+                    const stripped = baseName.substring(2); // 去掉 F_
+                    const folderSep = stripped.indexOf('___');
+                    let rest = stripped;
+                    if (folderSep !== -1) {
+                        folderPath = stripped.substring(0, folderSep).replace(/__/g, '/');
+                        rest = stripped.substring(folderSep + 3);
+                    }
+                    // rest = <nameEncoded>_<timestamp>
+                    const lastUnderscore = rest.lastIndexOf('_');
+                    if (lastUnderscore !== -1) {
+                        nameEncoded = rest.substring(0, lastUnderscore);
+                        timestamp = parseInt(rest.substring(lastUnderscore + 1)) || 0;
+                    } else {
+                        nameEncoded = rest;
                     }
                     
-                    const baseName = match[1];
-                    const partNum = parseInt(match[2]);
-                    const encoded = baseName.substring(2);  // 去掉 F_
-                    
-                    let fullPath, timestamp;
+                    let fileName;
                     try {
-                        const decoded = decodeBaseName(encoded);
-                        const sepIdx = decoded.lastIndexOf('|');
-                        if (sepIdx === -1) throw new Error('格式错误');
-                        fullPath = decoded.substring(0, sepIdx);
-                        timestamp = parseInt(decoded.substring(sepIdx + 1));
+                        fileName = decodeBaseName(nameEncoded);
                     } catch (e) {
-                        console.error('解码失败:', asset.name, e);
-                        return;
+                        fileName = nameEncoded;
                     }
                     
-                    const lastSlash = fullPath.lastIndexOf('/');
-                    const folderPath = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash);
-                    const fileName = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1);
+                    const fullPath = (folderPath ? folderPath + '/' : '') + fileName + '|' + baseName;
                     
                     if (!globalFiles[fullPath]) {
-                        globalFiles[fullPath] = { fileName, folderPath, timestamp, baseName, parts: [] };
+                        globalFiles[fullPath] = {
+                            fullPath, fileName, folderPath, baseName, timestamp,
+                            parts: []
+                        };
                     }
-                    globalFiles[fullPath].parts.push({ partNum, assetId: asset.id, size: asset.size });
+                    globalFiles[fullPath].parts.push({ id: asset.id, name: asset.name, size: asset.size, partNum });
                 });
                 
+                Object.values(globalFiles).forEach(f => f.parts.sort((a, b) => a.partNum - b.partNum));
                 renderFileList();
-                statusEl.innerText = "";
-            } catch (err) {
-                console.error('加载文件列表失败:', err);
-                statusEl.innerText = "数据同步失败";
+            } catch (e) {
+                listEl.innerHTML = `<div class="empty-state">❌ 加载失败: ${esc(e.message)}</div>`;
             }
         }
 
         function renderFileList() {
+            updateBreadcrumbNav();
             const listEl = document.getElementById('fileList');
-            listEl.innerHTML = "";
-            
-            const folders = new Set();
-            const collectChild = (path) => {
-                if (currentFolder === '') {
-                    if (path && !path.includes('/')) folders.add(path);
-                } else {
-                    const prefix = currentFolder + '/';
-                    if (path.startsWith(prefix)) {
-                        const rel = path.substring(prefix.length);
-                        if (rel && !rel.includes('/')) folders.add(rel);
-                    }
+            listEl.innerHTML = '';
+
+            // 子文件夹
+            const subFolders = new Set();
+            metadata.folders.forEach(folder => {
+                if (!currentFolder) {
+                    const top = folder.split('/')[0];
+                    if (top) subFolders.add(top);
+                } else if (folder.startsWith(currentFolder + '/')) {
+                    const rest = folder.substring(currentFolder.length + 1);
+                    const top = rest.split('/')[0];
+                    if (top) subFolders.add(currentFolder + '/' + top);
                 }
-            };
-            
-            metadata.folders.forEach(collectChild);
-            for (const fileData of Object.values(globalFiles)) {
-                if (fileData.folderPath) collectChild(fileData.folderPath);
+            });
+
+            // 当前文件夹的文件
+            const files = Object.values(globalFiles).filter(f => f.folderPath === currentFolder);
+
+            if (subFolders.size === 0 && files.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
+                return;
             }
-            
-            const files = [];
-            for (const [fullPath, fileData] of Object.entries(globalFiles)) {
-                fileData.parts.sort((a, b) => a.partNum - b.partNum);
-                if (fileData.folderPath === currentFolder) {
-                    files.push({ fullPath, ...fileData });
-                }
-            }
-            
-            Array.from(folders).sort().forEach(folderName => {
-                const folderPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
+
+            // 渲染文件夹
+            Array.from(subFolders).sort().forEach(folderPath => {
+                const folderName = folderPath.split('/').pop();
                 const item = document.createElement('div');
                 item.className = 'folder-item';
                 item.innerHTML = `
-                    <div class="folder-icon">
-                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-                    </div>
+                    <span class="folder-icon">
+                        <svg viewBox="0 0 24 24" style="width:22px;height:22px;"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.097.903 2 2 2h16c1.097 0 2-.903 2-2V8c0-1.11-.9-2-2-2h-8l-2-2z"/></svg>
+                    </span>
                     <span class="folder-name">${esc(folderName)}</span>
                     <span class="folder-meta">文件夹</span>
-                    <button class="icon-btn delete" title="删除" style="margin-left: auto;">
-                        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                    </button>
+                    <div style="flex: 1;"></div>
+                    <div class="file-actions">
+                        <button class="icon-btn" title="重命名" data-act="rename-folder">
+                            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        </button>
+                        <button class="icon-btn delete" title="删除" data-act="delete-folder">
+                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
                 `;
-                item.onclick = () => navigateToFolder(folderPath);
-                item.querySelector('.icon-btn.delete').onclick = (e) => {
-                    e.stopPropagation();
-                    deleteFolder(folderPath, folderName);
+                item.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    navigateToFolder(folderPath);
                 };
+                item.querySelector('[data-act="rename-folder"]').onclick = (e) => { e.stopPropagation(); renameFolder(folderPath); };
+                item.querySelector('[data-act="delete-folder"]').onclick = (e) => { e.stopPropagation(); deleteFolder(folderPath); };
                 listEl.appendChild(item);
             });
-            
+
+            // 渲染文件
             files.forEach(file => {
                 const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
-                const domId = safeId(file.fullPath);
                 
                 const item = document.createElement('div');
                 item.className = "file-item";
-                item.id = 'file_' + domId;
                 item.innerHTML = `
                     <input type="checkbox" class="file-checkbox">
                     <div class="file-info">
@@ -840,7 +796,7 @@
                         </button>
                     </div>
                 `;
-                
+
                 item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
 
                 const bind = (selector, handler) => {
@@ -862,250 +818,192 @@
                     () => openFileLink(file.baseName, file.fileName, 'download'),
                     () => copyFileLink(file.baseName, file.fileName, 'download')
                 );
-                bind('[data-act="rename"]', () => renameFile(file.fullPath, file.fileName, file.folderPath, file.baseName, file.timestamp));
-                bind('[data-act="delete"]', () => deleteFile(file.fullPath, file.fileName, file.baseName));
+                bind('[data-act="rename"]', () => renameFile(file));
+                bind('[data-act="delete"]', () => deleteFile(file));
 
                 listEl.appendChild(item);
             });
-            
-            if (folders.size === 0 && files.length === 0) {
-                listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
-            }
         }
 
-        // ======================= 选择 =======================
+        // ======================= 文件操作 =======================
         function toggleFileSelection(fullPath, checked) {
             if (checked) selectedFiles.add(fullPath);
             else selectedFiles.delete(fullPath);
-            const item = document.getElementById('file_' + safeId(fullPath));
-            if (item) item.classList.toggle('selected', checked);
             updateBatchActions();
         }
         function updateBatchActions() {
             const el = document.getElementById('batchActions');
-            if (selectedFiles.size > 0) {
+            const count = selectedFiles.size;
+            if (count > 0) {
                 el.classList.add('show');
-                document.getElementById('selectedCount').innerText = `已选择 ${selectedFiles.size} 个文件`;
+                document.getElementById('selectedCount').innerText = `已选择 ${count} 个文件`;
             } else {
                 el.classList.remove('show');
             }
         }
 
-        function renderDownloadTask(task) {
-            const queueEl = document.getElementById('downloadQueue');
-            const taskEl = document.createElement('div');
-            taskEl.className = 'task-item';
-            taskEl.id = task.id;
-            taskEl.innerHTML = `
-                <div class="task-header">
-                    <span class="task-name">${esc(task.displayName)} <span style="color:#888;font-size:12px;">(${formatBytes(task.totalSize)})</span></span>
-                    <span class="task-meta">
-                        <span id="dl_speed_${task.id}" class="task-status">准备中...</span>
-                        <span id="dl_percent_${task.id}" class="task-status">0%</span>
-                    </span>
-                </div>
-                <div class="progress-bg"><div id="dl_bar_${task.id}" class="progress-fill"></div></div>
-            `;
-            queueEl.appendChild(taskEl);
-        }
-        function updateDownloadProgress(task, progress, statusText, isError = false) {
-            const speedEl = document.getElementById(`dl_speed_${task.id}`);
-            const percentEl = document.getElementById(`dl_percent_${task.id}`);
-            const barEl = document.getElementById(`dl_bar_${task.id}`);
-            if (!speedEl || !percentEl || !barEl) return;
-            const percent = Math.min(100, (progress * 100)).toFixed(1);
-            barEl.style.width = `${percent}%`;
-            percentEl.innerText = `${percent}%`;
-            speedEl.innerText = statusText;
-            if (isError) { barEl.classList.add('error'); speedEl.style.color = 'var(--danger)'; }
-        }
-        function finishDownloadTask(taskId) {
-            setTimeout(() => {
-                const taskEl = document.getElementById(taskId);
-                if (taskEl) {
-                    const barEl = taskEl.querySelector('.progress-fill');
-                    if (barEl && !barEl.classList.contains('error')) barEl.classList.add('done');
-                }
-            }, 500);
-        }
-        function formatSpeed(bps) {
-            if (bps < 1024) return bps.toFixed(0) + ' B/s';
-            if (bps < 1024 * 1024) return (bps / 1024).toFixed(2) + ' KB/s';
-            return (bps / 1024 / 1024).toFixed(2) + ' MB/s';
+        async function renameFile(file) {
+            const newName = await showModal({ 
+                type: 'prompt', title: '重命名文件', 
+                message: `当前名称：${file.fileName}`, defaultValue: file.fileName 
+            });
+            if (!newName || newName.trim() === '' || newName === file.fileName) return;
+            
+            const folderPrefix = file.folderPath ? file.folderPath.replace(/\//g, '__') + '___' : '';
+            const newBaseName = `F_${folderPrefix}${encodeBaseName(newName.trim())}_${file.timestamp}`;
+            
+            try {
+                const resp = await fetch(`${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(file.baseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, {
+                    method: 'POST'
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                await loadFiles();
+            } catch (e) {
+                await showModal({ type: 'alert', title: '失败', message: e.message });
+            }
         }
 
-        // ======================= 批量操作 =======================
-        async function batchDownload() {
-            if (selectedFiles.size === 0) return;
-            const files = Array.from(selectedFiles).map(fullPath => ({
-                baseName: globalFiles[fullPath].baseName,
-                fileName: globalFiles[fullPath].fileName
-            }));
-            selectedFiles.clear();
-            updateBatchActions();
-            document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.file-item').forEach(item => item.classList.remove('selected'));
+        async function deleteFile(file) {
+            const confirmed = await showModal({ 
+                type: 'confirm', title: '确认删除', 
+                message: `确定要删除「${file.fileName}」吗？此操作不可恢复。` 
+            });
+            if (!confirmed) return;
             
-            // 依次触发下载（间隔一点防止浏览器拦截）
-            for (let i = 0; i < files.length; i++) {
-                const f = files[i];
-                setTimeout(() => {
-                    openFileLink(f.baseName, f.fileName, 'download');
-                }, i * 300);
+            try {
+                const resp = await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(file.baseName)}`, {
+                    method: 'DELETE'
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                selectedFiles.delete(file.fullPath);
+                updateBatchActions();
+                await loadFiles();
+            } catch (e) {
+                await showModal({ type: 'alert', title: '失败', message: e.message });
             }
         }
 
         async function batchDelete() {
             if (selectedFiles.size === 0) return;
-            const count = selectedFiles.size;
-            if (!(await showModal({ type: 'confirm', title: '确认批量删除', message: `确定删除选中的 ${count} 个文件吗？` }))) return;
+            const confirmed = await showModal({ 
+                type: 'confirm', title: '批量删除', 
+                message: `确定要删除选中的 ${selectedFiles.size} 个文件吗？此操作不可恢复。` 
+            });
+            if (!confirmed) return;
             
-            const statusEl = document.getElementById('downloadStatus');
-            statusEl.innerText = `正在删除 ${count} 个文件...`;
-            try {
-                const tasks = Array.from(selectedFiles).map(fullPath => {
-                    const baseName = globalFiles[fullPath].baseName;
-                    return fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
-                });
-                await Promise.all(tasks);
-                selectedFiles.clear();
-                updateBatchActions();
-                statusEl.innerText = '';
-                loadFiles();
-            } catch (err) {
-                console.error('批量删除失败:', err);
-                statusEl.innerText = '批量删除失败';
+            for (const fullPath of selectedFiles) {
+                const file = globalFiles[fullPath];
+                if (!file) continue;
+                try {
+                    await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(file.baseName)}`, { method: 'DELETE' });
+                } catch (e) { console.error(e); }
             }
+            selectedFiles.clear();
+            updateBatchActions();
+            await loadFiles();
         }
 
-        // ======================= 删除文件夹 =======================
-        async function deleteFolder(folderPath, folderName) {
-            if (!(await showModal({ type: 'confirm', title: '确认删除文件夹', message: `确定删除文件夹 "${folderName}" 及其所有内容？` }))) return;
-            const statusEl = document.getElementById('downloadStatus');
-            statusEl.innerText = '正在删除文件夹...';
-            try {
-                const tasks = [];
-                for (const [fullPath, fileData] of Object.entries(globalFiles)) {
-                    if (fileData.folderPath === folderPath || fileData.folderPath.startsWith(folderPath + '/')) {
-                        tasks.push(fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(fileData.baseName)}`, { method: 'DELETE' }));
-                    }
-                }
-                await Promise.all(tasks);
-                
-                metadata.folders = metadata.folders.filter(f => f !== folderPath && !f.startsWith(folderPath + '/'));
-                await saveMetadata();
-                
-                statusEl.innerText = '';
-                loadFiles();
-            } catch (err) {
-                console.error('删除文件夹失败:', err);
-                statusEl.innerText = '删除失败';
-            }
+        function batchDownload() {
+            if (selectedFiles.size === 0) return;
+            const files = Array.from(selectedFiles).map(fullPath => globalFiles[fullPath]).filter(Boolean);
+            selectedFiles.clear();
+            updateBatchActions();
+            document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
+            
+            files.forEach((f, i) => {
+                setTimeout(() => openFileLink(f.baseName, f.fileName, 'download'), i * 300);
+            });
         }
 
-        // ======================= 删除单个文件 =======================
-        async function deleteFile(fullPath, fileName, baseName) {
-            if (!(await showModal({ type: 'confirm', title: '确认删除', message: `彻底删除：${fileName} ？` }))) return;
-            document.getElementById('downloadStatus').innerText = '正在删除...';
-            try {
-                await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(baseName)}`, { method: 'DELETE' });
-                document.getElementById('downloadStatus').innerText = '';
-                loadFiles();
-            } catch (e) {
-                console.error('删除失败:', e);
-                document.getElementById('downloadStatus').innerText = '删除失败';
-            }
-        }
-
-        // ======================= 重命名 =======================
-        async function renameFile(oldFullPath, oldFileName, folderPath, oldBaseName, timestamp) {
-            const newName = await showModal({ type: 'prompt', title: '重命名', message: '输入新文件名：', defaultValue: oldFileName });
-            if (!newName || newName === oldFileName) return;
-            if (newName.includes('/') || newName.includes('\\')) {
-                await showModal({ type: 'alert', title: '错误', message: '文件名不能包含 / 或 \\' });
+        async function renameFolder(folderPath) {
+            const oldName = folderPath.split('/').pop();
+            const parentPath = folderPath.substring(0, folderPath.length - oldName.length - (folderPath.includes('/') ? 1 : 0));
+            
+            const newName = await showModal({ 
+                type: 'prompt', title: '重命名文件夹', 
+                message: `当前名称：${oldName}`, defaultValue: oldName 
+            });
+            if (!newName || !newName.trim() || newName === oldName) return;
+            const trimmed = newName.trim();
+            if (trimmed.includes('/') || trimmed.includes('\\')) {
+                await showModal({ type: 'alert', title: '错误', message: '文件夹名称不能包含 / 或 \\' });
                 return;
             }
-            document.getElementById('downloadStatus').innerText = '正在重命名...';
-            try {
-                const newFullPath = folderPath ? `${folderPath}/${newName}` : newName;
-                // 🔥 用 Base64 重新编码
-                const newBaseName = 'F_' + encodeBaseName(newFullPath + '|' + timestamp);
-                await fetch(
-                    `${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(oldBaseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, 
-                    { method: 'POST' }
-                );
-                document.getElementById('downloadStatus').innerText = '';
-                loadFiles();
-            } catch (e) {
-                console.error('重命名失败:', e);
-                document.getElementById('downloadStatus').innerText = '重命名失败';
+            
+            const newPath = parentPath ? `${parentPath}/${trimmed}` : trimmed;
+            if (metadata.folders.includes(newPath)) {
+                await showModal({ type: 'alert', title: '错误', message: '该名称的文件夹已存在' });
+                return;
             }
-        }
-
-        // ======================= 打开/复制链接 =======================
-        function getFileLink(baseName, fileName, mode) {
-            let link = `${WORKER_URL}/dl/${baseName}/${encodeURIComponent(fileName)}`;
-            if (mode === 'download') link += '?download=1';
-            return link;
-        }
-
-        // 点击：新标签页打开（预览/下载）
-        function openFileLink(baseName, fileName, mode) {
-            const link = getFileLink(baseName, fileName, mode);
-            window.open(link, '_blank');
-        }
-
-        // 右键 / 长按：复制链接
-        async function copyFileLink(baseName, fileName, mode) {
-            const link = getFileLink(baseName, fileName, mode);
-            try {
-                await navigator.clipboard.writeText(link);
-                showToast(mode === 'preview' ? '✅ 预览链接已复制' : '✅ 下载链接已复制');
-            } catch (e) {
-                await showModal({ type: 'alert', title: '链接（请手动复制）', message: link });
+            
+            // 更新 metadata
+            metadata.folders = metadata.folders.map(f => {
+                if (f === folderPath) return newPath;
+                if (f.startsWith(folderPath + '/')) return newPath + f.substring(folderPath.length);
+                return f;
+            });
+            
+            // 重命名该文件夹下所有文件的 prefix
+            const affectedFiles = Object.values(globalFiles).filter(f => 
+                f.folderPath === folderPath || f.folderPath.startsWith(folderPath + '/')
+            );
+            
+            for (const file of affectedFiles) {
+                const newFolderPath = newPath + file.folderPath.substring(folderPath.length);
+                const newFolderPrefix = newFolderPath ? newFolderPath.replace(/\//g, '__') + '___' : '';
+                const newBaseName = `F_${newFolderPrefix}${encodeBaseName(file.fileName)}_${file.timestamp}`;
+                try {
+                    await fetch(`${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(file.baseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, {
+                        method: 'POST'
+                    });
+                } catch (e) { console.error(e); }
             }
+            
+            await saveMetadata();
+            await loadFiles();
         }
 
-        // 简易 Toast 提示
-        function showToast(msg) {
-            let toast = document.getElementById('__toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = '__toast';
-                toast.style.cssText = `
-                    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-                    background: rgba(0,0,0,0.85); color: #fff; padding: 12px 24px;
-                    border-radius: 6px; font-size: 14px; z-index: 9999;
-                    opacity: 0; transition: opacity 0.3s; pointer-events: none;
-                    border: 1px solid var(--border);
-                `;
-                document.body.appendChild(toast);
+        async function deleteFolder(folderPath) {
+            const filesInFolder = Object.values(globalFiles).filter(f => 
+                f.folderPath === folderPath || f.folderPath.startsWith(folderPath + '/')
+            );
+            const subFoldersCount = metadata.folders.filter(f => f.startsWith(folderPath + '/')).length;
+            
+            const confirmed = await showModal({ 
+                type: 'confirm', title: '确认删除文件夹', 
+                message: `「${folderPath}」中包含 ${filesInFolder.length} 个文件，${subFoldersCount} 个子文件夹。删除后所有内容都将丢失，确定继续？` 
+            });
+            if (!confirmed) return;
+            
+            for (const file of filesInFolder) {
+                try {
+                    await fetch(`${WORKER_URL}/delete?prefix=${encodeURIComponent(file.baseName)}`, { method: 'DELETE' });
+                } catch (e) { console.error(e); }
             }
-            toast.innerText = msg;
-            toast.style.opacity = '1';
-            clearTimeout(toast._t);
-            toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+            
+            metadata.folders = metadata.folders.filter(f => f !== folderPath && !f.startsWith(folderPath + '/'));
+            await saveMetadata();
+            await loadFiles();
         }
-
-        window.openFileLink = openFileLink;
-        window.copyFileLink = copyFileLink;
 
         // ======================= 初始化 =======================
-        window.onload = () => {
-            loadFiles();
-            updateUploadPathDisplay();
-        };
+        document.getElementById('sendCodeBtn').onclick = sendLoginCode;
+        document.getElementById('loginBtn').onclick = doLogin;
+        document.getElementById('loginCode').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+        document.getElementById('loginEmail').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('loginCode').focus(); };
 
-        // ======================= 暴露到全局（供 HTML 内联 onclick 调用）=======================
-        window.showNewFolderDialog = showNewFolderDialog;
-        window.loadFiles = loadFiles;
-        window.batchDownload = batchDownload;
-        window.batchDelete = batchDelete;
-        window.navigateToFolder = navigateToFolder;
-        window.deleteFolder = deleteFolder;
-        window.deleteFile = deleteFile;
-        window.renameFile = renameFile;
-        window.toggleFileSelection = toggleFileSelection;
+        initUploadHandlers();
+
+        window.onload = async () => {
+            const ok = await checkLogin();
+            if (ok) {
+                hideLogin();
+                loadFiles();
+                updateUploadPathDisplay();
+            } else {
+                showLogin();
+            }
+        };
     </script>
 </body>
 </html>
