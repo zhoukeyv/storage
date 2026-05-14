@@ -343,13 +343,17 @@
             utf8.forEach(b => bin += String.fromCharCode(b));
             return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
         }
-        function decodeBaseName(encoded) {
-            let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-            while (b64.length % 4) b64 += '=';
-            const bin = atob(b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            return new TextDecoder().decode(bytes);
+        function decodeBaseName(str) {
+            try {
+                const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+                const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+                const bin = atob(b64 + pad);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                return new TextDecoder().decode(bytes);
+            } catch {
+                return str;
+            }
         }
         function esc(s) {
             return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -680,7 +684,10 @@
                 .split('/')
                 .filter(p => p && p !== '.' && p !== '..')
                 .join('/');
-            const folderPrefix = cleanFolder ? cleanFolder.replace(/\//g, '__') + '___' : '';
+            // 🔧 每段文件夹名都用 base64url 编码，避免 GitHub 把中文替换成 .
+            const folderPrefix = cleanFolder
+                ? cleanFolder.split('/').map(p => encodeBaseName(p)).join('__') + '___'
+                : '';
             const baseName = `F_${folderPrefix}${encodeBaseName(file.name)}_${timestamp}`;
             
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -775,7 +782,10 @@
                     const folderSep = stripped.indexOf('___');
                     let rest = stripped;
                     if (folderSep !== -1) {
-                        folderPath = stripped.substring(0, folderSep).replace(/__/g, '/');
+                        folderPath = stripped.substring(0, folderSep)
+                            .split('__')
+                            .map(p => decodeBaseName(p))
+                            .join('/');
                         rest = stripped.substring(folderSep + 3);
                     }
                     // rest = <nameEncoded>_<timestamp>
