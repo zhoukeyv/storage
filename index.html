@@ -408,9 +408,6 @@
         </div>
         
         <div id="fileList"></div>
-        
-        <!-- 下载队列 -->
-        <div id="downloadQueue" class="queue-container"></div>
     </div>
 
     <!-- 弹窗 -->
@@ -832,10 +829,7 @@
                         <button class="icon-btn" title="点击预览（右键复制链接）" data-act="preview-link">
                             <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                         </button>
-                        <button class="icon-btn" title="点击下载（右键复制链接）" data-act="download-link">
-                            <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
-                        </button>
-                        <button class="icon-btn" title="下载" data-act="download">
+                        <button class="icon-btn" title="点击下载（右键复制链接）" data-act="download">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
                         <button class="icon-btn" title="重命名" data-act="rename">
@@ -848,7 +842,7 @@
                 `;
                 
                 item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
-                
+
                 const bind = (selector, handler) => {
                     const el = item.querySelector(selector);
                     if (el) el.onclick = handler;
@@ -864,14 +858,13 @@
                     () => openFileLink(file.baseName, file.fileName, 'preview'),
                     () => copyFileLink(file.baseName, file.fileName, 'preview')
                 );
-                bindWithContext('[data-act="download-link"]',
+                bindWithContext('[data-act="download"]',
                     () => openFileLink(file.baseName, file.fileName, 'download'),
                     () => copyFileLink(file.baseName, file.fileName, 'download')
                 );
-                bind('[data-act="download"]', () => downloadFile(file.fullPath, file.fileName));
                 bind('[data-act="rename"]', () => renameFile(file.fullPath, file.fileName, file.folderPath, file.baseName, file.timestamp));
                 bind('[data-act="delete"]', () => deleteFile(file.fullPath, file.fileName, file.baseName));
-                
+
                 listEl.appendChild(item);
             });
             
@@ -895,84 +888,6 @@
                 document.getElementById('selectedCount').innerText = `已选择 ${selectedFiles.size} 个文件`;
             } else {
                 el.classList.remove('show');
-            }
-        }
-
-        // ======================= 下载 =======================
-        async function downloadFile(fullPath, suggestName) {
-            const fileData = globalFiles[fullPath];
-            if (!fileData) return;
-            
-            const taskId = 'dl_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-            const totalSize = fileData.parts.reduce((sum, p) => sum + p.size, 0);
-            const task = { id: taskId, displayName: suggestName, totalParts: fileData.parts.length, totalSize, downloadedBytes: 0 };
-            renderDownloadTask(task);
-            
-            try {
-                let writable;
-                let useFileSystemAPI = !!window.showSaveFilePicker;
-                let chunks = [];
-                
-                if (useFileSystemAPI) {
-                    try {
-                        const fileHandle = await window.showSaveFilePicker({ suggestedName: suggestName });
-                        writable = await fileHandle.createWritable();
-                    } catch (e) {
-                        if (e.name === 'AbortError') {
-                            document.getElementById(taskId)?.remove();
-                            return;
-                        }
-                        useFileSystemAPI = false;
-                    }
-                }
-                
-                let lastUpdate = Date.now();
-                let lastLoaded = 0;
-                
-                for (let i = 0; i < fileData.parts.length; i++) {
-                    const part = fileData.parts[i];
-                    const response = await fetch(`${WORKER_URL}/download?id=${part.assetId}`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    
-                    const reader = response.body.getReader();
-                    try {
-                        while (true) {
-                                        const { done, value } = await reader.read();
-                            if (done) break;
-                            
-                            if (useFileSystemAPI) await writable.write(value);
-                            else chunks.push(value);
-                            
-                            task.downloadedBytes += value.length;
-                            const now = Date.now();
-                            if (now - lastUpdate > 300) {
-                                const speed = (task.downloadedBytes - lastLoaded) / ((now - lastUpdate) / 1000);
-                                updateDownloadProgress(task, task.downloadedBytes / task.totalSize, `分块 ${i + 1}/${task.totalParts} • ${formatSpeed(speed)}`);
-                                lastUpdate = now;
-                                lastLoaded = task.downloadedBytes;
-                            }
-                        }
-                    } finally { reader.releaseLock(); }
-                }
-                
-                if (useFileSystemAPI) {
-                    await writable.close();
-                } else {
-                    const blob = new Blob(chunks);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = suggestName;
-                    a.click();
-                    setTimeout(() => URL.revokeObjectURL(url), 1000);
-                }
-                
-                updateDownloadProgress(task, 1, '已完成');
-                finishDownloadTask(taskId);
-            } catch (err) {
-                console.error('下载错误:', err);
-                updateDownloadProgress(task, task.downloadedBytes / task.totalSize, '失败: ' + err.message, true);
-                finishDownloadTask(taskId);
             }
         }
 
@@ -1023,13 +938,21 @@
         async function batchDownload() {
             if (selectedFiles.size === 0) return;
             const files = Array.from(selectedFiles).map(fullPath => ({
-                fullPath, fileName: globalFiles[fullPath].fileName
+                baseName: globalFiles[fullPath].baseName,
+                fileName: globalFiles[fullPath].fileName
             }));
             selectedFiles.clear();
             updateBatchActions();
             document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
             document.querySelectorAll('.file-item').forEach(item => item.classList.remove('selected'));
-            for (const file of files) await downloadFile(file.fullPath, file.fileName);
+            
+            // 依次触发下载（间隔一点防止浏览器拦截）
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                setTimeout(() => {
+                    openFileLink(f.baseName, f.fileName, 'download');
+                }, i * 300);
+            }
         }
 
         async function batchDelete() {
@@ -1182,7 +1105,6 @@
         window.deleteFolder = deleteFolder;
         window.deleteFile = deleteFile;
         window.renameFile = renameFile;
-        window.downloadFile = downloadFile;
         window.toggleFileSelection = toggleFileSelection;
     </script>
 </body>
