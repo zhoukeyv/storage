@@ -91,30 +91,65 @@
         .login-row label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 13px; }
         .login-row input { width: 100%; box-sizing: border-box; background: var(--bg-color); border: 1px solid var(--border); color: #fff; padding: 10px; border-radius: 6px; outline: none; }
         .login-row input:focus { border-color: var(--accent); }
-        .login-code-row { display: flex; gap: 8px; }
-        .login-code-row input { flex: 1; }
         .login-msg { margin-top: 12px; font-size: 13px; min-height: 20px; }
+
+        /* 登录/注册 Tab */
+        .auth-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .auth-tab {
+            flex: 1;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .auth-tab:hover { color: var(--text-main); }
+        .auth-tab-active {
+            background: var(--accent);
+            color: white;
+        }
+        .auth-tab-active:hover { color: white; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
 </head>
 <body>
 
-    <!-- 登录界面 -->
+    <!-- 登录/注册界面 -->
     <div id="loginScreen" class="login-screen" style="display: none;">
         <div class="box">
-            <h3>🔐 登录 Storage</h3>
+            <h3 id="authTitle">🔐 登录 Storage</h3>
+            
+            <div class="auth-tabs">
+                <button id="tabLogin" class="auth-tab auth-tab-active">登录</button>
+                <button id="tabRegister" class="auth-tab">注册</button>
+            </div>
+            
             <div class="login-row">
                 <label>邮箱</label>
-                <input id="loginEmail" type="email" placeholder="your@email.com">
+                <input id="loginEmail" type="email" placeholder="your@email.com" autocomplete="username">
             </div>
             <div class="login-row">
-                <label>验证码</label>
-                <div class="login-code-row">
-                    <input id="loginCode" type="text" placeholder="6 位数字" maxlength="6">
-                    <button id="sendCodeBtn" class="btn-secondary" style="white-space: nowrap;">发送</button>
-                </div>
+                <label>密码</label>
+                <input id="loginPassword" type="password" placeholder="登录密码" autocomplete="current-password">
             </div>
+            
+            <div class="login-row" id="inviteCodeRow" style="display: none;">
+                <label>邀请码</label>
+                <input id="loginInviteCode" type="text" placeholder="请输入管理员提供的邀请码" autocomplete="off">
+            </div>
+            
             <button id="loginBtn" class="btn" style="width: 100%;">登 录</button>
             <div id="loginMsg" class="login-msg"></div>
         </div>
@@ -126,7 +161,8 @@
             <span>Storage</span>
             <span style="font-size: 13px; color: var(--text-muted); font-weight: normal;">
                 <span id="currentUser"></span>
-                <button class="btn-secondary" onclick="logout()" style="margin-left: 12px; font-size: 13px; padding: 4px 12px;">退出</button>
+                <button class="btn-secondary" onclick="doChangePassword()" style="margin-left: 12px; font-size: 13px; padding: 4px 12px;">修改密码</button>
+                <button class="btn-secondary" onclick="logout()" style="margin-left: 8px; font-size: 13px; padding: 4px 12px;">退出</button>
             </span>
         </h1>
 
@@ -222,7 +258,12 @@
                     const meResp = await _fetch(`${WORKER_URL}/auth/me`, {
                         headers: { 'Authorization': `Bearer ${authToken}` }
                     });
-                    currentUserHash = (await meResp.json()).userHash;
+                    const meData = await meResp.json();
+                    currentUserHash = meData.userHash || '';
+                    if (!currentUserHash) {
+                        console.error('[checkLogin] /auth/me 返回异常:', meData);
+                        return false;
+                    }
                     document.getElementById('currentUser').innerText = data.email;
                     return true;
                 }
@@ -241,73 +282,95 @@
             document.getElementById('mainApp').style.display = 'block';
         }
 
-        async function sendLoginCode() {
-            const email = document.getElementById('loginEmail').value.trim();
+        // ======================= 登录 / 注册 =======================
+        let authMode = 'login'; // 'login' 或 'register'
+
+        function switchAuthMode(mode) {
+            authMode = mode;
+            const tabLogin = document.getElementById('tabLogin');
+            const tabRegister = document.getElementById('tabRegister');
+            const loginBtn = document.getElementById('loginBtn');
+            const inviteRow = document.getElementById('inviteCodeRow');
+            const authTitle = document.getElementById('authTitle');
             const msgEl = document.getElementById('loginMsg');
-            const btn = document.getElementById('sendCodeBtn');
-            if (!email) { msgEl.innerText = '请输入邮箱'; msgEl.style.color = 'var(--danger)'; return; }
+            const pwdInput = document.getElementById('loginPassword');
             
-            btn.disabled = true;
-            msgEl.innerText = '发送中...';
-            msgEl.style.color = 'var(--text-muted)';
+            msgEl.innerText = '';
             
-            try {
-                const resp = await _fetch(`${WORKER_URL}/auth/send-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || '发送失败');
-                msgEl.innerText = '✅ 验证码已发送到邮箱（请检查收件箱/垃圾箱）';
-                msgEl.style.color = 'var(--success)';
-                
-                let countdown = 60;
-                btn.innerText = `${countdown}s`;
-                const timer = setInterval(() => {
-                    countdown--;
-                    if (countdown < 0) {
-                        clearInterval(timer);
-                        btn.innerText = '发送';
-                        btn.disabled = false;
-                    } else {
-                        btn.innerText = `${countdown}s`;
-                    }
-                }, 1000);
-            } catch (e) {
-                msgEl.innerText = '❌ ' + e.message;
-                msgEl.style.color = 'var(--danger)';
-                btn.disabled = false;
+            if (mode === 'login') {
+                tabLogin.classList.add('auth-tab-active');
+                tabRegister.classList.remove('auth-tab-active');
+                loginBtn.innerText = '登 录';
+                inviteRow.style.display = 'none';
+                authTitle.innerText = '🔐 登录 Storage';
+                pwdInput.placeholder = '登录密码';
+                pwdInput.autocomplete = 'current-password';
+            } else {
+                tabLogin.classList.remove('auth-tab-active');
+                tabRegister.classList.add('auth-tab-active');
+                loginBtn.innerText = '注 册';
+                inviteRow.style.display = '';
+                authTitle.innerText = '✨ 注册 Storage';
+                pwdInput.placeholder = '至少 6 位';
+                pwdInput.autocomplete = 'new-password';
             }
         }
 
-        async function doLogin() {
+        async function doAuth() {
             const email = document.getElementById('loginEmail').value.trim();
-            const code = document.getElementById('loginCode').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const inviteCode = document.getElementById('loginInviteCode').value.trim();
             const msgEl = document.getElementById('loginMsg');
-            if (!email || !code) { msgEl.innerText = '请填写邮箱和验证码'; msgEl.style.color = 'var(--danger)'; return; }
             
-            msgEl.innerText = '登录中...';
+            if (!email || !password) {
+                msgEl.innerText = '请填写邮箱和密码';
+                msgEl.style.color = 'var(--danger)';
+                return;
+            }
+            
+            if (authMode === 'register') {
+                if (password.length < 6) {
+                    msgEl.innerText = '密码至少 6 位';
+                    msgEl.style.color = 'var(--danger)';
+                    return;
+                }
+                if (!inviteCode) {
+                    msgEl.innerText = '请填写邀请码';
+                    msgEl.style.color = 'var(--danger)';
+                    return;
+                }
+            }
+            
+            const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login';
+            const body = authMode === 'register'
+                ? { email, password, inviteCode }
+                : { email, password };
+            
+            msgEl.innerText = authMode === 'register' ? '注册中...' : '登录中...';
             msgEl.style.color = 'var(--text-muted)';
             
             try {
-                const resp = await _fetch(`${WORKER_URL}/auth/verify`, {
+                const resp = await _fetch(`${WORKER_URL}${endpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
+                    body: JSON.stringify(body)
                 });
                 const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || '登录失败');
+                if (!resp.ok) throw new Error(data.error || (authMode === 'register' ? '注册失败' : '登录失败'));
                 
                 authToken = data.token;
                 currentEmail = data.email;
                 localStorage.setItem('authToken', authToken);
-                // 🆕 获取 userHash
+                
                 const meResp = await _fetch(`${WORKER_URL}/auth/me`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
-                currentUserHash = (await meResp.json()).userHash;
-                msgEl.innerText = '✅ 登录成功';
+                const meData = await meResp.json();
+                currentUserHash = meData.userHash || '';
+                
+                if (!currentUserHash) throw new Error('获取用户信息失败');
+                
+                msgEl.innerText = authMode === 'register' ? '✅ 注册成功' : '✅ 登录成功';
                 msgEl.style.color = 'var(--success)';
                 
                 setTimeout(() => {
@@ -319,6 +382,56 @@
             } catch (e) {
                 msgEl.innerText = '❌ ' + e.message;
                 msgEl.style.color = 'var(--danger)';
+            }
+        }
+
+        async function doChangePassword() {
+            const oldPassword = await showModal({
+                type: 'prompt',
+                title: '修改密码（1/3）',
+                message: '请输入当前密码：',
+                inputType: 'password'
+            });
+            if (!oldPassword) return;
+            
+            const newPassword = await showModal({
+                type: 'prompt',
+                title: '修改密码（2/3）',
+                message: '请输入新密码（至少 6 位）：',
+                inputType: 'password'
+            });
+            if (!newPassword) return;
+            if (newPassword.length < 6) {
+                await showModal({ type: 'alert', title: '错误', message: '新密码至少 6 位' });
+                return;
+            }
+            
+            const confirmPwd = await showModal({
+                type: 'prompt',
+                title: '修改密码（3/3）',
+                message: '请再次输入新密码确认：',
+                inputType: 'password'
+            });
+            if (!confirmPwd) return;
+            if (confirmPwd !== newPassword) {
+                await showModal({ type: 'alert', title: '错误', message: '两次输入的密码不一致' });
+                return;
+            }
+            
+            try {
+                    const resp = await _fetch(`${WORKER_URL}/auth/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ oldPassword, newPassword })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || '修改失败');
+                await showModal({ type: 'alert', title: '成功', message: '密码已修改' });
+            } catch (e) {
+                await showModal({ type: 'alert', title: '错误', message: '修改失败：' + e.message });
             }
         }
 
@@ -335,6 +448,7 @@
         }
 
         window.logout = logout;
+        window.doChangePassword = doChangePassword;
 
         // ======================= 工具函数 =======================
         function encodeBaseName(str) {
@@ -371,7 +485,7 @@
         }
 
         // ======================= 弹窗 / Toast =======================
-        function showModal({ type, title, message, defaultValue = '' }) {
+        function showModal({ type, title, message, defaultValue = '', inputType = 'text' }) {
             return new Promise((resolve) => {
                 const overlay = document.getElementById('customModal');
                 document.getElementById('modalTitle').innerText = title;
@@ -381,6 +495,7 @@
                 
                 if (type === 'prompt') { 
                     inputEl.style.display = 'block'; 
+                    inputEl.type = inputType;
                     inputEl.value = defaultValue;
                     setTimeout(() => inputEl.focus(), 100);
                 } else { 
@@ -389,7 +504,10 @@
                 btnCancel.style.display = (type === 'alert') ? 'none' : 'block';
                 overlay.style.display = 'flex';
 
-                const close = () => { overlay.style.display = 'none'; };
+                const close = () => { 
+                    overlay.style.display = 'none'; 
+                    inputEl.type = 'text'; // 恢复
+                };
                 btnCancel.onclick = () => { close(); resolve(null); };
                 document.getElementById('modalBtnConfirm').onclick = () => { 
                     close(); 
@@ -521,12 +639,12 @@
         function initUploadHandlers() {
             const dropzone = document.getElementById('dropzone');
             const fileInput = document.getElementById('fileInput');
-            const folderInput = document.getElementById('folderInput');  // 🆕
+            const folderInput = document.getElementById('folderInput');
             const startUploadBtn = document.getElementById('startUploadBtn');
 
             dropzone.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
-            folderInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));  // 🆕
+            folderInput.addEventListener('change', (e) => addFilesToQueue(e.target.files));
             dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
             dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
             dropzone.addEventListener('drop', async (e) => {
@@ -535,12 +653,10 @@
                 
                 const items = e.dataTransfer.items;
                 if (items && items.length > 0 && items[0].webkitGetAsEntry) {
-                    // 支持拖拽文件夹
                     const files = [];
                     const traverse = async (entry, path = '') => {
                         if (entry.isFile) {
                             const file = await new Promise(res => entry.file(res));
-                            // 模拟 webkitRelativePath
                             Object.defineProperty(file, 'webkitRelativePath', {
                                 value: path + entry.name
                             });
@@ -564,7 +680,6 @@
                     }
                     addFilesToQueue(files);
                 } else {
-                    // 回退到普通文件
                     addFilesToQueue(e.dataTransfer.files);
                 }
             });
@@ -597,17 +712,14 @@
 
             Array.from(files).forEach(file => {
                 const relPath = file.webkitRelativePath || file.name;
-                // 🔧 严格过滤：去掉空段、. 和 ..
                 const parts = relPath.split('/').filter(p => p && p !== '.' && p !== '..');
                 const subFolderParts = parts.slice(0, -1);
 
-                // 🔧 计算目标文件夹（严格判断）
                 let targetFolder = currentFolder || '';
                 if (subFolderParts.length > 0) {
                     const subPath = subFolderParts.join('/');
                     targetFolder = currentFolder ? `${currentFolder}/${subPath}` : subPath;
 
-                    // 父级路径都记录
                     let acc = currentFolder || '';
                     for (const part of subFolderParts) {
                         acc = acc ? `${acc}/${part}` : part;
@@ -615,7 +727,6 @@
                     }
                 }
 
-                // 🔧 最后再清理一次 targetFolder，确保不会有 . 段
                 targetFolder = targetFolder
                     .split('/')
                     .filter(p => p && p !== '.' && p !== '..')
@@ -650,7 +761,6 @@
             if (newFolders.size > 0) {
                 let changed = false;
                 for (const folder of newFolders) {
-                    // 🔧 同样过滤
                     const clean = folder.split('/').filter(p => p && p !== '.' && p !== '..').join('/');
                     if (clean && !metadata.folders.includes(clean)) {
                         metadata.folders.push(clean);
@@ -684,7 +794,6 @@
                 .split('/')
                 .filter(p => p && p !== '.' && p !== '..')
                 .join('/');
-            // 🔧 每段文件夹名都用 base64url 编码，避免 GitHub 把中文替换成 .
             const folderPrefix = cleanFolder
                 ? cleanFolder.split('/').map(p => encodeBaseName(p)).join('__') + '___'
                 : '';
@@ -772,13 +881,11 @@
                     const baseName = m[1];
                     const partNum = parseInt(m[2]);
                     
-                    // 解析 F_<folderEncoded>___<nameEncoded>_<timestamp>
-                    // 或 F_<nameEncoded>_<timestamp>
                     let folderPath = '';
                     let nameEncoded = '';
                     let timestamp = 0;
                     
-                    const stripped = baseName.substring(2); // 去掉 F_
+                    const stripped = baseName.substring(2);
                     const folderSep = stripped.indexOf('___');
                     let rest = stripped;
                     if (folderSep !== -1) {
@@ -788,7 +895,6 @@
                             .join('/');
                         rest = stripped.substring(folderSep + 3);
                     }
-                    // rest = <nameEncoded>_<timestamp>
                     const lastUnderscore = rest.lastIndexOf('_');
                     if (lastUnderscore !== -1) {
                         nameEncoded = rest.substring(0, lastUnderscore);
@@ -827,7 +933,6 @@
             const listEl = document.getElementById('fileList');
             listEl.innerHTML = '';
 
-            // 子文件夹
             const subFolders = new Set();
             metadata.folders.forEach(folder => {
                 if (!currentFolder) {
@@ -840,7 +945,6 @@
                 }
             });
 
-            // 当前文件夹的文件
             const files = Object.values(globalFiles).filter(f => f.folderPath === currentFolder);
 
             if (subFolders.size === 0 && files.length === 0) {
@@ -848,7 +952,6 @@
                 return;
             }
 
-            // 渲染文件夹
             Array.from(subFolders).sort().forEach(folderPath => {
                 const folderName = folderPath.split('/').pop();
                 const item = document.createElement('div');
@@ -885,7 +988,6 @@
                 listEl.appendChild(item);
             });
 
-            // 渲染文件
             files.forEach(file => {
                 const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
@@ -1026,7 +1128,6 @@
             if (selectedFiles.size === 0) return;
             const files = Array.from(selectedFiles).map(fullPath => globalFiles[fullPath]).filter(Boolean);
             
-            // 文件数量多时建议打包
             let asZip = false;
             if (files.length >= 3) {
                 const choice = await showModal({
@@ -1051,7 +1152,6 @@
             }
         }
 
-        // 通用打包函数（也供文件夹下载用）
         async function downloadFilesAsZip(files, zipName) {
             const totalSize = files.reduce((sum, f) => sum + f.parts.reduce((s, p) => s + p.size, 0), 0);
             
@@ -1086,7 +1186,6 @@
                     if (!resp.ok) throw new Error(`下载失败: ${file.fileName}`);
                     const blob = await resp.blob();
                     
-                    // 保留路径
                     const pathInZip = file.folderPath ? `${file.folderPath}/${file.fileName}` : file.fileName;
                     zip.file(pathInZip, blob);
                     downloaded += blob.size;
@@ -1134,21 +1233,18 @@
                 return;
             }
             
-            // 更新 metadata
             metadata.folders = metadata.folders.map(f => {
                 if (f === folderPath) return newPath;
                 if (f.startsWith(folderPath + '/')) return newPath + f.substring(folderPath.length);
                 return f;
             });
             
-            // 重命名该文件夹下所有文件的 prefix
             const affectedFiles = Object.values(globalFiles).filter(f => 
                 f.folderPath === folderPath || f.folderPath.startsWith(folderPath + '/')
             );
             
             for (const file of affectedFiles) {
                 const newFolderPath = newPath + file.folderPath.substring(folderPath.length);
-                // 🔧 每段文件夹名都用 base64url 编码
                 const newFolderPrefix = newFolderPath
                     ? newFolderPath.split('/').filter(p => p).map(p => encodeBaseName(p)).join('__') + '___'
                     : '';
@@ -1190,7 +1286,6 @@
         async function downloadFolder(folderPath) {
             const folderName = folderPath.split('/').pop();
             
-            // 收集该文件夹下所有文件（包括子文件夹）
             const files = Object.values(globalFiles).filter(f => 
                 f.folderPath === folderPath || f.folderPath.startsWith(folderPath + '/')
             );
@@ -1209,7 +1304,6 @@
             });
             if (!confirmed) return;
             
-            // 创建进度任务
             const taskId = 'dl-folder-' + Date.now();
             const taskEl = document.createElement('div');
             taskEl.className = 'task-item';
@@ -1241,7 +1335,6 @@
                     
                     updateStatus(`下载中 (${i + 1}/${files.length}) ${file.fileName}`, (downloadedBytes / totalSize) * 100);
                     
-                    // 通过公开链接下载（包含所有分块合并后的完整文件）
                     const link = `${WORKER_URL}/dl/${currentUserHash}/${file.baseName}/${encodeURIComponent(file.fileName)}?download=1`;
                     const resp = await fetch(link);
                     if (!resp.ok) throw new Error(`下载失败: ${file.fileName}`);
@@ -1256,15 +1349,13 @@
                 updateStatus('压缩中...', 100);
                 taskEl.querySelector('.progress-fill').classList.add('done');
                 
-                // 流式生成 ZIP 并保存
                 const zipBlob = await zip.generateAsync(
-                    { type: 'blob', compression: 'STORE' },  // STORE = 不压缩，速度快（文件本身已经压缩过的就不再压）
+                    { type: 'blob', compression: 'STORE' },
                     (meta) => {
                         updateStatus(`打包中 ${meta.percent.toFixed(0)}%`);
                     }
                 );
                 
-                // 触发下载
                 const url = URL.createObjectURL(zipBlob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -1287,10 +1378,25 @@
         window.downloadFolder = downloadFolder;
 
         // ======================= 初始化 =======================
-        document.getElementById('sendCodeBtn').onclick = sendLoginCode;
-        document.getElementById('loginBtn').onclick = doLogin;
-        document.getElementById('loginCode').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-        document.getElementById('loginEmail').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('loginCode').focus(); };
+        document.getElementById('tabLogin').onclick = () => switchAuthMode('login');
+        document.getElementById('tabRegister').onclick = () => switchAuthMode('register');
+        document.getElementById('loginBtn').onclick = doAuth;
+
+        document.getElementById('loginEmail').onkeydown = (e) => {
+            if (e.key === 'Enter') document.getElementById('loginPassword').focus();
+        };
+        document.getElementById('loginPassword').onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                if (authMode === 'register') {
+                    document.getElementById('loginInviteCode').focus();
+                } else {
+                    doAuth();
+                }
+            }
+        };
+        document.getElementById('loginInviteCode').onkeydown = (e) => {
+            if (e.key === 'Enter') doAuth();
+        };
 
         initUploadHandlers();
 
