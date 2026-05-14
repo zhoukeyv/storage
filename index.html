@@ -586,41 +586,47 @@
 
         function addFilesToQueue(files) {
             if (files.length === 0) return;
-            const uploadQueueEl = document.getElementById('uploadQueue');
-                        const fileInput = document.getElementById('fileInput');
+            const fileInput = document.getElementById('fileInput');
+            const folderInput = document.getElementById('folderInput');
             const startUploadBtn = document.getElementById('startUploadBtn');
-
-            // 🆕 收集所有需要创建的子文件夹
             const newFolders = new Set();
 
             Array.from(files).forEach(file => {
-                // 解析相对路径
                 const relPath = file.webkitRelativePath || file.name;
-                // 🔧 过滤掉空段、. 和 ..
+                // 🔧 严格过滤：去掉空段、. 和 ..
                 const parts = relPath.split('/').filter(p => p && p !== '.' && p !== '..');
-                const subFolderParts = parts.slice(0, -1); // 去掉文件名
-                
-                // 计算这个文件应该上传到哪个文件夹
-                let targetFolder = currentFolder;
+                const subFolderParts = parts.slice(0, -1);
+
+                // 🔧 计算目标文件夹（严格判断）
+                let targetFolder = currentFolder || '';
                 if (subFolderParts.length > 0) {
                     const subPath = subFolderParts.join('/');
                     targetFolder = currentFolder ? `${currentFolder}/${subPath}` : subPath;
-                    
-                    // 把所有父级路径都加入待创建列表
-                    let acc = currentFolder;
+
+                    // 父级路径都记录
+                    let acc = currentFolder || '';
                     for (const part of subFolderParts) {
                         acc = acc ? `${acc}/${part}` : part;
                         newFolders.add(acc);
                     }
                 }
-                
+
+                // 🔧 最后再清理一次 targetFolder，确保不会有 . 段
+                targetFolder = targetFolder
+                    .split('/')
+                    .filter(p => p && p !== '.' && p !== '..')
+                    .join('/');
+
                 const task = {
-                    file, status: 'pending', uploaded: 0, total: file.size,
+                    file,
+                    status: 'pending',
+                    uploaded: 0,
+                    total: file.size,
                     domId: 'task-' + Math.random().toString(36).slice(2, 9),
-                    folder: targetFolder  // 🆕 使用目标文件夹
+                    folder: targetFolder
                 };
                 uploadQueue.push(task);
-                
+
                 const taskEl = document.createElement('div');
                 taskEl.className = 'task-item';
                 taskEl.id = task.domId;
@@ -637,26 +643,21 @@
                 document.getElementById('uploadQueue').appendChild(taskEl);
             });
 
-            // 🆕 创建所有新文件夹到 metadata
             if (newFolders.size > 0) {
-                let metadataChanged = false;
+                let changed = false;
                 for (const folder of newFolders) {
-                    if (!metadata.folders.includes(folder)) {
-                        metadata.folders.push(folder);
-                        metadataChanged = true;
+                    // 🔧 同样过滤
+                    const clean = folder.split('/').filter(p => p && p !== '.' && p !== '..').join('/');
+                    if (clean && !metadata.folders.includes(clean)) {
+                        metadata.folders.push(clean);
+                        changed = true;
                     }
                 }
-                if (metadataChanged) {
-                    saveMetadata().catch(console.error);
-                }
+                if (changed) saveMetadata().catch(console.error);
             }
 
             fileInput.value = '';
-            folderInput.value = '';  // 🆕
-            startUploadBtn.style.display = 'block';
-            startUploadBtn.innerText = `开始统一传输 (${uploadQueue.length} 个文件)`;
-
-            fileInput.value = '';
+            if (folderInput) folderInput.value = '';
             startUploadBtn.style.display = 'block';
             startUploadBtn.innerText = `开始统一传输 (${uploadQueue.length} 个文件)`;
         }
