@@ -1675,34 +1675,46 @@
 
         function updateBreadcrumbNavPublic() {
             const el = document.getElementById('breadcrumbNav');
+            const shareRoot = window.__shareRoot || '';
+            const shareRootParent = shareRoot.includes('/') ? shareRoot.substring(0, shareRoot.lastIndexOf('/')) : '';
             
-            // 计算分享根目录
-            const shareInfo = checkShareMode();
-            const shareRoot = shareInfo ? shareInfo.folderPath : '';
-            
-            if (currentFolder === shareRoot) {
-                const rootName = shareRoot ? shareRoot.split('/').pop() : '根目录';
-                el.innerHTML = `<span class="breadcrumb-item current">📤 ${esc(rootName)}</span>`;
+            // 在分享根的父级（首页视图）
+            if (currentFolder === shareRootParent) {
+                el.innerHTML = '<span class="breadcrumb-item current">📤 共享内容</span>';
                 return;
             }
             
-            // 显示相对于 shareRoot 的路径
-            const relPath = currentFolder.substring(shareRoot.length).replace(/^\//, '');
-            const parts = relPath.split('/');
+            // 已进入文件夹
+            // 计算从 shareRoot 开始的相对路径
+            const fullParts = currentFolder.split('/');
+            const shareRootParts = shareRoot ? shareRoot.split('/') : [];
             
-            const rootName = shareRoot ? shareRoot.split('/').pop() : '根目录';
-            let html = `<span class="breadcrumb-item" data-rel="">📤 ${esc(rootName)}</span>`;
-            let path = shareRoot;
-            parts.forEach((part, i) => {
+            // 找到从哪一段开始显示
+            let displayStartIdx = 0;
+            if (shareRoot.includes('/')) {
+                // shareRootParent 之后开始显示
+                displayStartIdx = shareRootParent.split('/').length;
+            }
+            
+            let html = '<span class="breadcrumb-item" data-target="root">📤 共享内容</span>';
+            let path = shareRootParent;
+            
+            for (let i = displayStartIdx; i < fullParts.length; i++) {
+                const part = fullParts[i];
                 path = path ? `${path}/${part}` : part;
-                const isLast = (i === parts.length - 1);
-                html += `<span class="breadcrumb-separator">/</span>`;
+                const isLast = (i === fullParts.length - 1);
+                html += '<span class="breadcrumb-separator">/</span>';
                 html += `<span class="breadcrumb-item ${isLast ? 'current' : ''}" data-path="${esc(path)}">${esc(part)}</span>`;
-            });
+            }
+            
             el.innerHTML = html;
             el.querySelectorAll('.breadcrumb-item:not(.current)').forEach(node => {
                 node.onclick = () => {
-                    currentFolder = node.dataset.path || shareRoot;
+                    if (node.dataset.target === 'root') {
+                        currentFolder = shareRootParent;
+                    } else {
+                        currentFolder = node.dataset.path;
+                    }
                     renderPublicFileList();
                 };
             });
