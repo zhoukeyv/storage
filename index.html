@@ -1450,26 +1450,34 @@
             // 设置全局变量（用别人的 userHash）
             currentUserHash = shareInfo.userHash;
             currentEmail = '👤 公开分享';
-            currentFolder = shareInfo.folderPath;
             
-            // UI 改造：隐藏写操作
-            document.getElementById('currentUser').innerText = '📤 共享视图';
+            // 🔧 关键改动：currentFolder 设为分享文件夹的"父级"
+            // 这样分享的文件夹本身会作为一个条目显示
+            const sharePath = shareInfo.folderPath;
+            if (sharePath && sharePath.includes('/')) {
+                currentFolder = sharePath.substring(0, sharePath.lastIndexOf('/'));
+            } else {
+                currentFolder = ''; // 父级是根目录
+            }
             
-            // 隐藏上传区
-            const uploadBox = document.querySelector('.box');
-            if (uploadBox) uploadBox.style.display = 'none';
+            // 记录分享根目录（用于限制访问范围）
+            window.__shareRoot = sharePath;
             
-            // 顶部按钮区改造
+            // 顶部 UI 改造
             const headerRight = document.querySelector('h1 > span:last-child');
             if (headerRight) {
+                const folderName = sharePath ? sharePath.split('/').pop() : '根目录';
                 headerRight.innerHTML = `
-                    <span style="color: var(--accent);">📤 共享视图</span>
-                    <span style="margin-left: 12px; color: var(--text-muted);">${esc(shareInfo.folderPath || '/')}</span>
+                    <span style="color: var(--accent);">📤 共享：${esc(folderName)}</span>
                 `;
             }
             
-            // 列表操作栏：去掉"新建文件夹"
-            const listHeader = document.querySelectorAll('.list-header')[0];
+            // 隐藏上传区
+            const boxes = document.querySelectorAll('.box');
+            if (boxes[0]) boxes[0].style.display = 'none';
+            
+            // 列表操作栏：去掉"新建文件夹"按钮
+            const listHeader = document.querySelector('.list-header');
             if (listHeader) {
                 const buttons = listHeader.querySelectorAll('button');
                 buttons.forEach(b => {
@@ -1555,14 +1563,31 @@
             const listEl = document.getElementById('fileList');
             listEl.innerHTML = '';
 
-            // 子文件夹
+            const shareRoot = window.__shareRoot || '';
+            
+            // 🔧 限制：只显示 shareRoot 及其子内容
+            // 如果当前文件夹在 shareRoot 之外，不允许访问
+            if (shareRoot && currentFolder !== '' && 
+                currentFolder !== shareRoot.substring(0, shareRoot.lastIndexOf('/')) &&
+                currentFolder !== shareRoot &&
+                !currentFolder.startsWith(shareRoot + '/') &&
+                currentFolder !== shareRoot.substring(0, shareRoot.lastIndexOf('/'))) {
+                // 不在分享范围，强制回到分享根的父级
+                currentFolder = shareRoot.includes('/') ? shareRoot.substring(0, shareRoot.lastIndexOf('/')) : '';
+            }
+
+            // 计算要显示的子文件夹
             const subFolders = new Set();
             metadata.folders.forEach(folder => {
+                // 🔧 关键：只显示 shareRoot 或其子文件夹
+                if (folder !== shareRoot && !folder.startsWith(shareRoot + '/')) {
+                    return; // 不在分享范围内
+                }
+                
+                // 计算这个文件夹在当前视图下应该显示的"直接子级"
                 if (!currentFolder) {
                     const top = folder.split('/')[0];
                     if (top) subFolders.add(top);
-                } else if (folder === currentFolder) {
-                    // 当前文件夹本身，跳过
                 } else if (folder.startsWith(currentFolder + '/')) {
                     const rest = folder.substring(currentFolder.length + 1);
                     const top = rest.split('/')[0];
@@ -1570,14 +1595,23 @@
                 }
             });
 
-            const files = Object.values(globalFiles).filter(f => f.folderPath === currentFolder);
+            // 计算要显示的文件（在当前文件夹下）
+            // 🔧 但要限制：只显示在 shareRoot 范围内的
+            const files = Object.values(globalFiles).filter(f => {
+                if (f.folderPath !== currentFolder) return false;
+                // 当前文件夹必须在 shareRoot 范围内
+                if (currentFolder !== shareRoot && !currentFolder.startsWith(shareRoot + '/') && shareRoot !== '') {
+                    return false;
+                }
+                return true;
+            });
 
             if (subFolders.size === 0 && files.length === 0) {
                 listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
                 return;
             }
 
-            // 渲染文件夹（只读，只有 进入 / 下载）
+            // 渲染文件夹
             Array.from(subFolders).sort().forEach(folderPath => {
                 const folderName = folderPath.split('/').pop();
                 const item = document.createElement('div');
@@ -1590,15 +1624,18 @@
                     <span class="folder-meta">文件夹</span>
                     <div style="flex: 1;"></div>
                     <div class="file-actions">
-                        <button class="icon-btn" title="打包下载" data-act="download-folder">
+                        <button class="icon-btn" title="打包下载整个文件夹" data-act="download-folder">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
                     </div>
                 `;
                 item.onclick = (e) => {
                     if (e.target.closest('button')) return;
-                    currentFolder = folderPath;
-                    renderPublicFileList();
+                    // 进入子文件夹，但不能超出 shareRoot 范围
+                    if (folderPath === shareRoot || folderPath.startsWith(shareRoot + '/') || shareRoot === '') {
+                        currentFolder = folderPath;
+                        renderPublicFileList();
+                    }
                 };
                 item.querySelector('[data-act="download-folder"]').onclick = (e) => { 
                     e.stopPropagation(); 
@@ -1607,7 +1644,7 @@
                 listEl.appendChild(item);
             });
 
-            // 渲染文件（只读，只有 预览 / 下载）
+            // 渲染文件
             files.forEach(file => {
                 const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
                 const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
