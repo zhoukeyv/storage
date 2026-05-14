@@ -964,6 +964,9 @@
                     <span class="folder-meta">文件夹</span>
                     <div style="flex: 1;"></div>
                     <div class="file-actions">
+                        <button class="icon-btn" title="复制公开分享链接" data-act="share-folder">
+                            <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+                        </button>
                         <button class="icon-btn" title="下载" data-act="download-folder">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
@@ -978,6 +981,22 @@
                 item.onclick = (e) => {
                     if (e.target.closest('button')) return;
                     navigateToFolder(folderPath);
+                };
+                item.querySelector('[data-act="share-folder"]').onclick = async (e) => {
+                    e.stopPropagation();
+                    const utf8 = new TextEncoder().encode(folderPath);
+                    let bin = '';
+                    utf8.forEach(b => bin += String.fromCharCode(b));
+                    const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    
+                    // 前端页面 URL + ?share=<userHash>&path=<base64folder>
+                    const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
+                    try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        showToast('✅ 公开分享链接已复制');
+                    } catch (err) {
+                        await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
+                    }
                 };
                 item.querySelector('[data-act="download-folder"]').onclick = (e) => { 
                     e.stopPropagation(); 
@@ -1400,7 +1419,266 @@
 
         initUploadHandlers();
 
+        // ======================= 公开分享模式 =======================
+        function checkShareMode() {
+            const urlParams = new URLSearchParams(location.search);
+            const shareUserHash = urlParams.get('share');
+            const sharePath = urlParams.get('path');
+            if (!shareUserHash) return null;
+            
+            let folderPath = '';
+            if (sharePath) {
+                try {
+                    const b64 = sharePath.replace(/-/g, '+').replace(/_/g, '/');
+                    const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+                    const bin = atob(b64 + pad);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    folderPath = new TextDecoder().decode(bytes);
+                } catch (e) {
+                    console.error('解析分享路径失败', e);
+                }
+            }
+            return { userHash: shareUserHash, folderPath };
+        }
+
+        async function enterShareMode(shareInfo) {
+            // 隐藏登录界面，显示主界面
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            
+            // 设置全局变量（用别人的 userHash）
+            currentUserHash = shareInfo.userHash;
+            currentEmail = '👤 公开分享';
+            currentFolder = shareInfo.folderPath;
+            
+            // UI 改造：隐藏写操作
+            document.getElementById('currentUser').innerText = '📤 共享视图';
+            
+            // 隐藏上传区
+            const uploadBox = document.querySelector('.box');
+            if (uploadBox) uploadBox.style.display = 'none';
+            
+            // 顶部按钮区改造
+            const headerRight = document.querySelector('h1 > span:last-child');
+            if (headerRight) {
+                headerRight.innerHTML = `
+                    <span style="color: var(--accent);">📤 共享视图</span>
+                    <span style="margin-left: 12px; color: var(--text-muted);">${esc(shareInfo.folderPath || '/')}</span>
+                `;
+            }
+            
+            // 列表操作栏：去掉"新建文件夹"
+            const listHeader = document.querySelectorAll('.list-header')[0];
+            if (listHeader) {
+                const buttons = listHeader.querySelectorAll('button');
+                buttons.forEach(b => {
+                    if (b.innerText.includes('新建文件夹')) b.style.display = 'none';
+                });
+            }
+            
+            // 加载公开数据
+            await loadPublicFiles();
+        }
+
+        async function loadPublicFiles() {
+            const listEl = document.getElementById('fileList');
+            listEl.innerHTML = '<div class="empty-state">加载中...</div>';
+            
+            try {
+                // 加载公开元数据
+                const metaResp = await _fetch(`${WORKER_URL}/public/metadata/${currentUserHash}?t=${Date.now()}`);
+                metadata = await metaResp.json();
+                if (!metadata.folders) metadata.folders = [];
+                
+                // 加载公开文件列表
+                const response = await _fetch(`${WORKER_URL}/public/list/${currentUserHash}?t=${Date.now()}`);
+                if (!response.ok) throw new Error('加载失败');
+                const assets = await response.json();
+                
+                globalFiles = {};
+                assets.forEach(asset => {
+                    if (asset.name === METADATA_FILENAME) return;
+                    if (!asset.name.startsWith('F_')) return;
+                    
+                    const m = asset.name.match(/^(F_.+)\.part(\d+)$/);
+                    if (!m) return;
+                    const baseName = m[1];
+                    const partNum = parseInt(m[2]);
+                    
+                    let folderPath = '';
+                    let nameEncoded = '';
+                    let timestamp = 0;
+                    
+                    const stripped = baseName.substring(2);
+                    const folderSep = stripped.indexOf('___');
+                    let rest = stripped;
+                    if (folderSep !== -1) {
+                        folderPath = stripped.substring(0, folderSep)
+                            .split('__')
+                            .map(p => decodeBaseName(p))
+                            .join('/');
+                        rest = stripped.substring(folderSep + 3);
+                    }
+                    const lastUnderscore = rest.lastIndexOf('_');
+                    if (lastUnderscore !== -1) {
+                        nameEncoded = rest.substring(0, lastUnderscore);
+                        timestamp = parseInt(rest.substring(lastUnderscore + 1)) || 0;
+                    } else {
+                        nameEncoded = rest;
+                    }
+                    
+                    let fileName;
+                    try { fileName = decodeBaseName(nameEncoded); }
+                    catch (e) { fileName = nameEncoded; }
+                    
+                    const fullPath = (folderPath ? folderPath + '/' : '') + fileName + '|' + baseName;
+                    
+                    if (!globalFiles[fullPath]) {
+                        globalFiles[fullPath] = {
+                            fullPath, fileName, folderPath, baseName, timestamp,
+                            parts: []
+                        };
+                    }
+                    globalFiles[fullPath].parts.push({ id: asset.id, name: asset.name, size: asset.size, partNum });
+                });
+                
+                Object.values(globalFiles).forEach(f => f.parts.sort((a, b) => a.partNum - b.partNum));
+                renderPublicFileList();
+            } catch (e) {
+                listEl.innerHTML = `<div class="empty-state">❌ 加载失败: ${esc(e.message)}</div>`;
+            }
+        }
+
+        function renderPublicFileList() {
+            updateBreadcrumbNavPublic();
+            const listEl = document.getElementById('fileList');
+            listEl.innerHTML = '';
+
+            // 子文件夹
+            const subFolders = new Set();
+            metadata.folders.forEach(folder => {
+                if (!currentFolder) {
+                    const top = folder.split('/')[0];
+                    if (top) subFolders.add(top);
+                } else if (folder === currentFolder) {
+                    // 当前文件夹本身，跳过
+                } else if (folder.startsWith(currentFolder + '/')) {
+                    const rest = folder.substring(currentFolder.length + 1);
+                    const top = rest.split('/')[0];
+                    if (top) subFolders.add(currentFolder + '/' + top);
+                }
+            });
+
+            const files = Object.values(globalFiles).filter(f => f.folderPath === currentFolder);
+
+            if (subFolders.size === 0 && files.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">此文件夹为空</div>';
+                return;
+            }
+
+            // 渲染文件夹（只读，只有 进入 / 下载）
+            Array.from(subFolders).sort().forEach(folderPath => {
+                const folderName = folderPath.split('/').pop();
+                const item = document.createElement('div');
+                item.className = 'folder-item';
+                item.innerHTML = `
+                    <span class="folder-icon">
+                        <svg viewBox="0 0 24 24" style="width:22px;height:22px;"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.097.903 2 2 2h16c1.097 0 2-.903 2-2V8c0-1.11-.9-2-2-2h-8l-2-2z"/></svg>
+                    </span>
+                    <span class="folder-name">${esc(folderName)}</span>
+                    <span class="folder-meta">文件夹</span>
+                    <div style="flex: 1;"></div>
+                    <div class="file-actions">
+                        <button class="icon-btn" title="打包下载" data-act="download-folder">
+                            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        </button>
+                    </div>
+                `;
+                item.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    currentFolder = folderPath;
+                    renderPublicFileList();
+                };
+                item.querySelector('[data-act="download-folder"]').onclick = (e) => { 
+                    e.stopPropagation(); 
+                    downloadFolder(folderPath); 
+                };
+                listEl.appendChild(item);
+            });
+
+            // 渲染文件（只读，只有 预览 / 下载）
+            files.forEach(file => {
+                const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
+                const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
+                
+                const item = document.createElement('div');
+                item.className = "file-item";
+                item.innerHTML = `
+                    <div class="file-info" style="margin-left: 0;">
+                        <span class="file-name">${esc(file.fileName)}</span>
+                        <span class="file-meta">${timeString} • ${formatBytes(totalSize)}</span>
+                    </div>
+                    <div class="file-actions">
+                        <button class="icon-btn" title="预览" data-act="preview-link">
+                            <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </button>
+                        <button class="icon-btn" title="下载" data-act="download">
+                            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        </button>
+                    </div>
+                `;
+
+                item.querySelector('[data-act="preview-link"]').onclick = () => openFileLink(file.baseName, file.fileName, 'preview');
+                item.querySelector('[data-act="download"]').onclick = () => openFileLink(file.baseName, file.fileName, 'download');
+
+                listEl.appendChild(item);
+            });
+        }
+
+        function updateBreadcrumbNavPublic() {
+            const el = document.getElementById('breadcrumbNav');
+            
+            // 计算分享根目录
+            const shareInfo = checkShareMode();
+            const shareRoot = shareInfo ? shareInfo.folderPath : '';
+            
+            if (currentFolder === shareRoot) {
+                const rootName = shareRoot ? shareRoot.split('/').pop() : '根目录';
+                el.innerHTML = `<span class="breadcrumb-item current">📤 ${esc(rootName)}</span>`;
+                return;
+            }
+            
+            // 显示相对于 shareRoot 的路径
+            const relPath = currentFolder.substring(shareRoot.length).replace(/^\//, '');
+            const parts = relPath.split('/');
+            
+            const rootName = shareRoot ? shareRoot.split('/').pop() : '根目录';
+            let html = `<span class="breadcrumb-item" data-rel="">📤 ${esc(rootName)}</span>`;
+            let path = shareRoot;
+            parts.forEach((part, i) => {
+                path = path ? `${path}/${part}` : part;
+                const isLast = (i === parts.length - 1);
+                html += `<span class="breadcrumb-separator">/</span>`;
+                html += `<span class="breadcrumb-item ${isLast ? 'current' : ''}" data-path="${esc(path)}">${esc(part)}</span>`;
+            });
+            el.innerHTML = html;
+            el.querySelectorAll('.breadcrumb-item:not(.current)').forEach(node => {
+                node.onclick = () => {
+                    currentFolder = node.dataset.path || shareRoot;
+                    renderPublicFileList();
+                };
+            });
+        }
+
         window.onload = async () => {
+            // 检测公开分享模式
+            const shareInfo = checkShareMode();
+            if (shareInfo) {
+                await enterShareMode(shareInfo);
+                return;
+            }
+            
             const ok = await checkLogin();
             if (ok) {
                 hideLogin();
