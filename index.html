@@ -676,10 +676,10 @@
         async function processSingleTask(task) {
             const file = task.file;
             const timestamp = Date.now();
-            // 🔧 清理掉文件夹路径里的 . 段（双保险）
-            const cleanFolder = task.folder
-                ? task.folder.split('/').filter(p => p && p !== '.' && p !== '..').join('/')
-                : '';
+            const cleanFolder = (task.folder || '')
+                .split('/')
+                .filter(p => p && p !== '.' && p !== '..')
+                .join('/');
             const folderPrefix = cleanFolder ? cleanFolder.replace(/\//g, '__') + '___' : '';
             const baseName = `F_${folderPrefix}${encodeBaseName(file.name)}_${timestamp}`;
             
