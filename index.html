@@ -120,6 +120,64 @@
             color: white;
         }
         .auth-tab-active:hover { color: white; }
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .search-box input {
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 6px 28px 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            width: 220px;
+            transition: border-color 0.2s, width 0.2s;
+        }
+        .search-box input:focus {
+            border-color: var(--accent);
+            width: 280px;
+        }
+        .search-clear {
+            position: absolute;
+            right: 4px;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+        }
+        .search-clear:hover {
+            color: var(--text-main);
+            background: transparent;
+        }
+        .search-box.has-value .search-clear {
+            display: block;
+        }
+
+        /* 高亮匹配字符 */
+        .match-highlight {
+            color: var(--accent);
+            font-weight: 700;
+            background: rgba(59, 130, 246, 0.15);
+            border-radius: 2px;
+            padding: 0 1px;
+        }
+
+        /* 搜索模式下的路径提示 */
+        .search-path {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .search-result-count {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
@@ -191,7 +249,11 @@
         <div class="box">
             <div class="list-header">
                 <h3 style="margin: 0;">云端文件</h3>
-                <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <div class="search-box">
+                        <input id="searchInput" type="text" placeholder="🔍 搜索文件...（支持模糊匹配）" autocomplete="off">
+                        <button id="searchClearBtn" class="search-clear" title="清除">✕</button>
+                    </div>
                     <span id="downloadStatus" class="status"></span>
                     <button class="btn-secondary" onclick="showNewFolderDialog()">新建文件夹</button>
                     <button class="btn-secondary" onclick="loadFiles()">刷新</button>
@@ -483,7 +545,92 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+        // ======================= 模糊搜索 =======================
+        // 子序列匹配：返回 { score, indices } 或 null
+        // score 越高越好
+        function fuzzyMatch(query, text) {
+            if (!query) return { score: 0, indices: [] };
+            const q = query.toLowerCase();
+            const t = text.toLowerCase();
+            
+            // 完全匹配优先
+            const exactIdx = t.indexOf(q);
+            if (exactIdx !== -1) {
+                const indices = [];
+                for (let i = 0; i < q.length; i++) indices.push(exactIdx + i);
+                // 完全匹配给高分，开头匹配额外加分
+                return { 
+                    score: 10000 - exactIdx * 10 + (exactIdx === 0 ? 5000 : 0),
+                    indices 
+                };
+            }
+            
+            // 子序列匹配
+            const indices = [];
+            let qi = 0;
+            let lastMatchIdx = -1;
+            let consecutiveBonus = 0;
+            let score = 0;
+            
+            for (let i = 0; i < t.length && qi < q.length; i++) {
+                if (t[i] === q[qi]) {
+                    indices.push(i);
+                    
+                    // 连续匹配加分
+                    if (lastMatchIdx === i - 1) {
+                        consecutiveBonus += 15;
+                    } else {
+                        consecutiveBonus = 0;
+                    }
+                    
+                    // 单词开头匹配加分（前一个字符是分隔符）
+                    if (i === 0 || /[\s\-_./\\]/.test(t[i - 1])) {
+                        score += 50;
+                    }
+                    
+                    // 大写字母位置匹配（驼峰）
+                    if (text[i] >= 'A' && text[i] <= 'Z') {
+                        score += 30;
+                    }
+                    
+                    score += 10 + consecutiveBonus;
+                    lastMatchIdx = i;
+                    qi++;
+                }
+            }
+            
+            if (qi < q.length) return null; // 没有完全匹配
+            
+            // 越短的字符串相对得分越高
+            score -= (t.length - q.length) * 0.5;
+            
+            return { score, indices };
+        }
 
+        // 在字符串中高亮匹配位置
+        function highlightMatch(text, indices) {
+            if (!indices || indices.length === 0) return esc(text);
+            
+            let html = '';
+            let i = 0;
+            let idxPtr = 0;
+            while (i < text.length) {
+                if (idxPtr < indices.length && indices[idxPtr] === i) {
+                    // 连续高亮段
+                    let j = i;
+                    while (idxPtr < indices.length && indices[idxPtr] === j) {
+                        idxPtr++;
+                        j++;
+                    }
+                    html += `<span class="match-highlight">${esc(text.substring(i, j))}</span>`;
+                    i = j;
+                } else {
+                    html += esc(text[i]);
+                    i++;
+                }
+            }
+            return html;
+        }
         // ======================= 弹窗 / Toast =======================
         function showModal({ type, title, message, defaultValue = '', inputType = 'text' }) {
             return new Promise((resolve) => {
@@ -855,6 +1002,7 @@
         // ======================= 文件列表 =======================
         let globalFiles = {};
         let selectedFiles = new Set();
+        let searchQuery = '';
 
         async function loadFiles() {
             const listEl = document.getElementById('fileList');
@@ -933,6 +1081,13 @@
             const listEl = document.getElementById('fileList');
             listEl.innerHTML = '';
 
+            // ===== 搜索模式 =====
+            if (searchQuery) {
+                renderSearchResults();
+                return;
+            }
+
+            // ===== 普通模式 =====
             const subFolders = new Set();
             metadata.folders.forEach(folder => {
                 if (!currentFolder) {
@@ -953,111 +1108,211 @@
             }
 
             Array.from(subFolders).sort().forEach(folderPath => {
-                const folderName = folderPath.split('/').pop();
-                const item = document.createElement('div');
-                item.className = 'folder-item';
-                item.innerHTML = `
-                    <span class="folder-icon">
-                        <svg viewBox="0 0 24 24" style="width:22px;height:22px;"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.097.903 2 2 2h16c1.097 0 2-.903 2-2V8c0-1.11-.9-2-2-2h-8l-2-2z"/></svg>
-                    </span>
-                    <span class="folder-name">${esc(folderName)}</span>
-                    <span class="folder-meta">文件夹</span>
-                    <div style="flex: 1;"></div>
-                    <div class="file-actions">
-                        <button class="icon-btn" title="下载" data-act="download-folder">
-                            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                        </button>
-                        <button class="icon-btn" title="重命名" data-act="rename-folder">
-                            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                        </button>
-                        <button class="icon-btn delete" title="删除" data-act="delete-folder">
-                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                        </button>
-                    </div>
-                `;
-                item.onclick = (e) => {
-                    if (e.target.closest('button')) return;
-                    navigateToFolder(folderPath);
-                };
-                const dlFolderBtn = item.querySelector('[data-act="download-folder"]');
-                dlFolderBtn.onclick = (e) => { 
-                    e.stopPropagation(); 
-                    downloadFolder(folderPath); 
-                };
-                dlFolderBtn.oncontextmenu = async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const utf8 = new TextEncoder().encode(folderPath);
-                    let bin = '';
-                    utf8.forEach(b => bin += String.fromCharCode(b));
-                    const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
-                    try {
-                        await navigator.clipboard.writeText(shareUrl);
-                        showToast('✅ 文件夹分享链接已复制');
-                    } catch (err) {
-                        await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
-                    }
-                };
-                item.querySelector('[data-act="rename-folder"]').onclick = (e) => { e.stopPropagation(); renameFolder(folderPath); };
-                item.querySelector('[data-act="delete-folder"]').onclick = (e) => { e.stopPropagation(); deleteFolder(folderPath); };
-                listEl.appendChild(item);
+                renderFolderItem(folderPath, listEl);
             });
 
             files.forEach(file => {
-                const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
-                const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
-                
-                const item = document.createElement('div');
-                item.className = "file-item";
-                item.innerHTML = `
-                    <input type="checkbox" class="file-checkbox">
-                    <div class="file-info">
-                        <span class="file-name">${esc(file.fileName)}</span>
-                        <span class="file-meta">${timeString} • ${file.parts.length} 个分块 • ${formatBytes(totalSize)}</span>
-                    </div>
-                    <div class="file-actions">
-                        <button class="icon-btn" title="点击预览（右键复制链接）" data-act="preview-link">
-                            <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                        </button>
-                        <button class="icon-btn" title="点击下载（右键复制链接）" data-act="download">
-                            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                        </button>
-                        <button class="icon-btn" title="重命名" data-act="rename">
-                            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                        </button>
-                        <button class="icon-btn delete" title="删除" data-act="delete">
-                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                        </button>
-                    </div>
-                `;
-
-                item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
-
-                const bind = (selector, handler) => {
-                    const el = item.querySelector(selector);
-                    if (el) el.onclick = handler;
-                };
-                const bindWithContext = (selector, leftClick, rightClick) => {
-                    const el = item.querySelector(selector);
-                    if (!el) return;
-                    el.onclick = leftClick;
-                    el.oncontextmenu = (e) => { e.preventDefault(); rightClick(); };
-                };
-
-                bindWithContext('[data-act="preview-link"]',
-                    () => openFileLink(file.baseName, file.fileName, 'preview'),
-                    () => copyFileLink(file.baseName, file.fileName, 'preview')
-                );
-                bindWithContext('[data-act="download"]',
-                    () => openFileLink(file.baseName, file.fileName, 'download'),
-                    () => copyFileLink(file.baseName, file.fileName, 'download')
-                );
-                bind('[data-act="rename"]', () => renameFile(file));
-                bind('[data-act="delete"]', () => deleteFile(file));
-
-                listEl.appendChild(item);
+                renderFileItem(file, listEl);
             });
+        }
+
+        function renderSearchResults() {
+            const listEl = document.getElementById('fileList');
+            
+            // 收集所有文件夹候选
+            const folderCandidates = [];
+            metadata.folders.forEach(folderPath => {
+                const folderName = folderPath.split('/').pop();
+                const m = fuzzyMatch(searchQuery, folderName);
+                if (m) {
+                    folderCandidates.push({ folderPath, folderName, ...m });
+                } else {
+                    // 也匹配完整路径
+                    const pm = fuzzyMatch(searchQuery, folderPath);
+                    if (pm) folderCandidates.push({ folderPath, folderName, score: pm.score - 100, indices: [] });
+                }
+            });
+            folderCandidates.sort((a, b) => b.score - a.score);
+            
+            // 收集所有文件候选
+            const fileCandidates = [];
+            Object.values(globalFiles).forEach(file => {
+                const m = fuzzyMatch(searchQuery, file.fileName);
+                if (m) {
+                    fileCandidates.push({ file, score: m.score, indices: m.indices });
+                } else {
+                    // 也匹配完整路径
+                    const fullPath = (file.folderPath ? file.folderPath + '/' : '') + file.fileName;
+                    const pm = fuzzyMatch(searchQuery, fullPath);
+                    if (pm) fileCandidates.push({ file, score: pm.score - 200, indices: [] });
+                }
+            });
+            fileCandidates.sort((a, b) => b.score - a.score);
+            
+            // 顶部结果统计
+            const count = folderCandidates.length + fileCandidates.length;
+            const summary = document.createElement('div');
+            summary.style.cssText = 'padding: 8px 4px; color: var(--text-muted); font-size: 13px;';
+            summary.innerHTML = `🔍 找到 <span style="color: var(--accent); font-weight: 600;">${count}</span> 项匹配「${esc(searchQuery)}」`;
+            listEl.appendChild(summary);
+            
+            if (count === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.innerText = '没有找到匹配项';
+                listEl.appendChild(empty);
+                return;
+            }
+            
+            // 渲染（限制最多 50 条，避免太多）
+            const MAX_RESULTS = 100;
+            let rendered = 0;
+            
+            for (const c of folderCandidates) {
+                if (rendered >= MAX_RESULTS) break;
+                renderFolderItem(c.folderPath, listEl, { highlightIndices: c.indices, showFullPath: true });
+                rendered++;
+            }
+            
+            for (const c of fileCandidates) {
+                if (rendered >= MAX_RESULTS) break;
+                renderFileItem(c.file, listEl, { highlightIndices: c.indices, showFullPath: true });
+                rendered++;
+            }
+            
+            if (count > MAX_RESULTS) {
+                const more = document.createElement('div');
+                more.style.cssText = 'padding: 12px; text-align: center; color: var(--text-muted); font-size: 13px;';
+                more.innerText = `... 还有 ${count - MAX_RESULTS} 项（请输入更精确的关键词）`;
+                listEl.appendChild(more);
+            }
+        }
+
+        // 抽取出来的文件夹渲染函数（兼容搜索）
+        function renderFolderItem(folderPath, listEl, opts = {}) {
+            const folderName = folderPath.split('/').pop();
+            const parentPath = folderPath.substring(0, folderPath.length - folderName.length - 1);
+            
+            const nameHtml = opts.highlightIndices 
+                ? highlightMatch(folderName, opts.highlightIndices)
+                : esc(folderName);
+            
+            const pathHtml = opts.showFullPath && parentPath
+                ? `<div class="search-path">📂 /${esc(parentPath)}/</div>`
+                : '';
+            
+            const item = document.createElement('div');
+            item.className = 'folder-item';
+            item.innerHTML = `
+                <span class="folder-icon">
+                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.097.903 2 2 2h16c1.097 0 2-.903 2-2V8c0-1.11-.9-2-2-2h-8l-2-2z"/></svg>
+                </span>
+                <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
+                    <span class="folder-name">${nameHtml}</span>
+                    ${pathHtml}
+                </div>
+                <span class="folder-meta">文件夹</span>
+                <div class="file-actions">
+                    <button class="icon-btn" title="左键打包下载，右键复制分享链接" data-act="download-folder">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    </button>
+                    <button class="icon-btn" title="重命名" data-act="rename-folder">
+                        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    </button>
+                    <button class="icon-btn delete" title="删除" data-act="delete-folder">
+                        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                </div>
+            `;
+            item.onclick = (e) => {
+                if (e.target.closest('button')) return;
+                navigateToFolder(folderPath);
+                // 进入文件夹后清除搜索
+                clearSearch();
+            };
+            
+            const dlFolderBtn = item.querySelector('[data-act="download-folder"]');
+            dlFolderBtn.onclick = (e) => { e.stopPropagation(); downloadFolder(folderPath); };
+            dlFolderBtn.oncontextmenu = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const utf8 = new TextEncoder().encode(folderPath);
+                let bin = '';
+                utf8.forEach(b => bin += String.fromCharCode(b));
+                const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showToast('✅ 文件夹分享链接已复制');
+                } catch (err) {
+                    await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
+                }
+            };
+            
+            item.querySelector('[data-act="rename-folder"]').onclick = (e) => { e.stopPropagation(); renameFolder(folderPath); };
+            item.querySelector('[data-act="delete-folder"]').onclick = (e) => { e.stopPropagation(); deleteFolder(folderPath); };
+            listEl.appendChild(item);
+        }
+
+        // 抽取出来的文件渲染函数（兼容搜索）
+        function renderFileItem(file, listEl, opts = {}) {
+            const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
+            const totalSize = file.parts.reduce((sum, p) => sum + p.size, 0);
+            
+            const nameHtml = opts.highlightIndices
+                ? highlightMatch(file.fileName, opts.highlightIndices)
+                : esc(file.fileName);
+            
+            const pathHtml = opts.showFullPath && file.folderPath
+                ? `<div class="search-path">📂 /${esc(file.folderPath)}/</div>`
+                : '';
+            
+            const item = document.createElement('div');
+            item.className = "file-item";
+            item.innerHTML = `
+                <input type="checkbox" class="file-checkbox">
+                <div class="file-info">
+                    <span class="file-name">${nameHtml}</span>
+                    ${pathHtml}
+                    <span class="file-meta">${timeString} • ${file.parts.length} 个分块 • ${formatBytes(totalSize)}</span>
+                </div>
+                <div class="file-actions">
+                    <button class="icon-btn" title="左键预览，右键复制预览链接" data-act="preview-link">
+                        <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    </button>
+                    <button class="icon-btn" title="左键下载，右键复制下载链接" data-act="download">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    </button>
+                    <button class="icon-btn" title="重命名" data-act="rename">
+                        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    </button>
+                    <button class="icon-btn delete" title="删除" data-act="delete">
+                        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                </div>
+            `;
+
+            item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
+
+            const bindWithContext = (selector, leftClick, rightClick) => {
+                const el = item.querySelector(selector);
+                if (!el) return;
+                el.onclick = leftClick;
+                el.oncontextmenu = (e) => { e.preventDefault(); rightClick(); };
+            };
+
+            bindWithContext('[data-act="preview-link"]',
+                () => openFileLink(file.baseName, file.fileName, 'preview'),
+                () => copyFileLink(file.baseName, file.fileName, 'preview')
+            );
+            bindWithContext('[data-act="download"]',
+                () => openFileLink(file.baseName, file.fileName, 'download'),
+                () => copyFileLink(file.baseName, file.fileName, 'download')
+            );
+            item.querySelector('[data-act="rename"]').onclick = () => renameFile(file);
+            item.querySelector('[data-act="delete"]').onclick = () => deleteFile(file);
+
+            listEl.appendChild(item);
         }
 
         // ======================= 文件操作 =======================
