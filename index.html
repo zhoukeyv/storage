@@ -1116,40 +1116,25 @@
             });
         }
 
+        // ======================= 搜索渲染 =======================
         function renderSearchResults() {
             const listEl = document.getElementById('fileList');
             
-            // 收集所有文件夹候选
             const folderCandidates = [];
             metadata.folders.forEach(folderPath => {
                 const folderName = folderPath.split('/').pop();
                 const m = fuzzyMatch(searchQuery, folderName);
-                if (m) {
-                    folderCandidates.push({ folderPath, folderName, ...m });
-                } else {
-                    // 也匹配完整路径
-                    const pm = fuzzyMatch(searchQuery, folderPath);
-                    if (pm) folderCandidates.push({ folderPath, folderName, score: pm.score - 100, indices: [] });
-                }
+                if (m) folderCandidates.push({ folderPath, folderName, indices: m.indices, score: m.score });
             });
             folderCandidates.sort((a, b) => b.score - a.score);
             
-            // 收集所有文件候选
             const fileCandidates = [];
             Object.values(globalFiles).forEach(file => {
                 const m = fuzzyMatch(searchQuery, file.fileName);
-                if (m) {
-                    fileCandidates.push({ file, score: m.score, indices: m.indices });
-                } else {
-                    // 也匹配完整路径
-                    const fullPath = (file.folderPath ? file.folderPath + '/' : '') + file.fileName;
-                    const pm = fuzzyMatch(searchQuery, fullPath);
-                    if (pm) fileCandidates.push({ file, score: pm.score - 200, indices: [] });
-                }
+                if (m) fileCandidates.push({ file, score: m.score, indices: m.indices });
             });
             fileCandidates.sort((a, b) => b.score - a.score);
             
-            // 顶部结果统计
             const count = folderCandidates.length + fileCandidates.length;
             const summary = document.createElement('div');
             summary.style.cssText = 'padding: 8px 4px; color: var(--text-muted); font-size: 13px;';
@@ -1164,28 +1149,147 @@
                 return;
             }
             
-            // 渲染（限制最多 50 条，避免太多）
-            const MAX_RESULTS = 100;
+            const MAX = 100;
             let rendered = 0;
-            
             for (const c of folderCandidates) {
-                if (rendered >= MAX_RESULTS) break;
-                renderFolderItem(c.folderPath, listEl, { highlightIndices: c.indices, showFullPath: true });
+                if (rendered >= MAX) break;
+                renderSearchFolderItem(c.folderPath, c.indices, listEl);
                 rendered++;
             }
-            
             for (const c of fileCandidates) {
-                if (rendered >= MAX_RESULTS) break;
-                renderFileItem(c.file, listEl, { highlightIndices: c.indices, showFullPath: true });
+                if (rendered >= MAX) break;
+                renderSearchFileItem(c.file, c.indices, listEl);
                 rendered++;
             }
-            
-            if (count > MAX_RESULTS) {
+            if (count > MAX) {
                 const more = document.createElement('div');
                 more.style.cssText = 'padding: 12px; text-align: center; color: var(--text-muted); font-size: 13px;';
-                more.innerText = `... 还有 ${count - MAX_RESULTS} 项（请输入更精确的关键词）`;
+                more.innerText = `... 还有 ${count - MAX} 项（请输入更精确的关键词）`;
                 listEl.appendChild(more);
             }
+        }
+
+        function renderSearchFolderItem(folderPath, indices, listEl) {
+            const folderName = folderPath.split('/').pop();
+            const parentPath = folderPath.substring(0, folderPath.length - folderName.length - 1);
+            const nameHtml = highlightMatch(folderName, indices);
+            const pathHtml = parentPath ? `<div class="search-path">📂 /${esc(parentPath)}/</div>` : '';
+            
+            const item = document.createElement('div');
+            item.className = 'folder-item';
+            item.innerHTML = `
+                <span class="folder-icon">
+                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.097.903 2 2 2h16c1.097 0 2-.903 2-2V8c0-1.11-.9-2-2-2h-8l-2-2z"/></svg>
+                </span>
+                <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
+                    <span class="folder-name">${nameHtml}</span>
+                    ${pathHtml}
+                </div>
+                <span class="folder-meta">文件夹</span>
+                <div class="file-actions">
+                    <button class="icon-btn" title="左键打包下载，右键复制分享链接" data-act="dl-folder">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    </button>
+                </div>
+            `;
+            item.onclick = (e) => {
+                if (e.target.closest('button')) return;
+                clearSearch();
+                navigateToFolder(folderPath);
+            };
+            const dlBtn = item.querySelector('[data-act="dl-folder"]');
+            dlBtn.onclick = (e) => { e.stopPropagation(); downloadFolder(folderPath); };
+            dlBtn.oncontextmenu = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const utf8 = new TextEncoder().encode(folderPath);
+                let bin = '';
+                utf8.forEach(b => bin += String.fromCharCode(b));
+                const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showToast('✅ 文件夹分享链接已复制');
+                } catch (err) {
+                    await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
+                }
+            };
+            listEl.appendChild(item);
+        }
+
+        function renderSearchFileItem(file, indices, listEl) {
+            const timeString = file.timestamp ? new Date(file.timestamp).toLocaleString('zh-CN', { hour12: false }) : '未知时间';
+            const totalSize = file.parts.reduce((s, p) => s + p.size, 0);
+            const nameHtml = highlightMatch(file.fileName, indices);
+            const pathHtml = file.folderPath ? `<div class="search-path">📂 /${esc(file.folderPath)}/</div>` : '';
+            
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <input type="checkbox" class="file-checkbox">
+                <div class="file-info">
+                    <span class="file-name">${nameHtml}</span>
+                    ${pathHtml}
+                    <span class="file-meta">${timeString} • ${file.parts.length} 个分块 • ${formatBytes(totalSize)}</span>
+                </div>
+                <div class="file-actions">
+                    <button class="icon-btn" title="左键预览，右键复制链接" data-act="preview"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+                    <button class="icon-btn" title="左键下载，右键复制链接" data-act="dl"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
+                    <button class="icon-btn" title="重命名" data-act="rename"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+                    <button class="icon-btn delete" title="删除" data-act="del"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+                </div>
+            `;
+            item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
+            
+            const bindWithContext = (selector, leftClick, rightClick) => {
+                const el = item.querySelector(selector);
+                if (!el) return;
+                el.onclick = leftClick;
+                el.oncontextmenu = (e) => { e.preventDefault(); rightClick(); };
+            };
+            
+            bindWithContext('[data-act="preview"]',
+                () => openFileLink(file.baseName, file.fileName, 'preview'),
+                () => copyFileLink(file.baseName, file.fileName, 'preview')
+            );
+            bindWithContext('[data-act="dl"]',
+                () => openFileLink(file.baseName, file.fileName, 'download'),
+                () => copyFileLink(file.baseName, file.fileName, 'download')
+            );
+            item.querySelector('[data-act="rename"]').onclick = () => renameFile(file);
+            item.querySelector('[data-act="del"]').onclick = () => deleteFile(file);
+            
+            listEl.appendChild(item);
+        }
+
+        function clearSearch() {
+            searchQuery = '';
+            const input = document.getElementById('searchInput');
+            if (input) {
+                input.value = '';
+                input.parentElement.classList.remove('has-value');
+            }
+            renderFileList();
+        }
+        window.clearSearch = clearSearch;
+
+        function initSearch() {
+            const input = document.getElementById('searchInput');
+            const clearBtn = document.getElementById('searchClearBtn');
+            if (!input || !clearBtn) {
+                console.warn('搜索框元素未找到');
+                return;
+            }
+            const searchBox = input.parentElement;
+            let timer = null;
+            input.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                searchBox.classList.toggle('has-value', val.length > 0);
+                clearTimeout(timer);
+                timer = setTimeout(() => { searchQuery = val; renderFileList(); }, 150);
+            });
+            input.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearSearch(); });
+            clearBtn.addEventListener('click', clearSearch);
         }
 
         // 抽取出来的文件夹渲染函数（兼容搜索）
@@ -1670,6 +1774,7 @@
         };
 
         initUploadHandlers();
+        initSearch();
 
         // ======================= 公开分享模式 =======================
         function checkShareMode() {
