@@ -982,25 +982,25 @@
                     if (e.target.closest('button')) return;
                     navigateToFolder(folderPath);
                 };
-                item.querySelector('[data-act="share-folder"]').onclick = async (e) => {
+                const dlFolderBtn = item.querySelector('[data-act="download-folder"]');
+                dlFolderBtn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    downloadFolder(folderPath); 
+                };
+                dlFolderBtn.oncontextmenu = async (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     const utf8 = new TextEncoder().encode(folderPath);
                     let bin = '';
                     utf8.forEach(b => bin += String.fromCharCode(b));
                     const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    
-                    // 前端页面 URL + ?share=<userHash>&path=<base64folder>
                     const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
                     try {
                         await navigator.clipboard.writeText(shareUrl);
-                        showToast('✅ 公开分享链接已复制');
+                        showToast('✅ 文件夹分享链接已复制');
                     } catch (err) {
                         await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
                     }
-                };
-                item.querySelector('[data-act="download-folder"]').onclick = (e) => { 
-                    e.stopPropagation(); 
-                    downloadFolder(folderPath); 
                 };
                 item.querySelector('[data-act="rename-folder"]').onclick = (e) => { e.stopPropagation(); renameFolder(folderPath); };
                 item.querySelector('[data-act="delete-folder"]').onclick = (e) => { e.stopPropagation(); deleteFolder(folderPath); };
@@ -1565,26 +1565,19 @@
 
             const shareRoot = window.__shareRoot || '';
             
-            // 🔧 限制：只显示 shareRoot 及其子内容
-            // 如果当前文件夹在 shareRoot 之外，不允许访问
             if (shareRoot && currentFolder !== '' && 
                 currentFolder !== shareRoot.substring(0, shareRoot.lastIndexOf('/')) &&
                 currentFolder !== shareRoot &&
-                !currentFolder.startsWith(shareRoot + '/') &&
-                currentFolder !== shareRoot.substring(0, shareRoot.lastIndexOf('/'))) {
-                // 不在分享范围，强制回到分享根的父级
+                !currentFolder.startsWith(shareRoot + '/')) {
                 currentFolder = shareRoot.includes('/') ? shareRoot.substring(0, shareRoot.lastIndexOf('/')) : '';
             }
 
-            // 计算要显示的子文件夹
             const subFolders = new Set();
             metadata.folders.forEach(folder => {
-                // 🔧 关键：只显示 shareRoot 或其子文件夹
                 if (folder !== shareRoot && !folder.startsWith(shareRoot + '/')) {
-                    return; // 不在分享范围内
+                    return;
                 }
                 
-                // 计算这个文件夹在当前视图下应该显示的"直接子级"
                 if (!currentFolder) {
                     const top = folder.split('/')[0];
                     if (top) subFolders.add(top);
@@ -1595,11 +1588,8 @@
                 }
             });
 
-            // 计算要显示的文件（在当前文件夹下）
-            // 🔧 但要限制：只显示在 shareRoot 范围内的
             const files = Object.values(globalFiles).filter(f => {
                 if (f.folderPath !== currentFolder) return false;
-                // 当前文件夹必须在 shareRoot 范围内
                 if (currentFolder !== shareRoot && !currentFolder.startsWith(shareRoot + '/') && shareRoot !== '') {
                     return false;
                 }
@@ -1624,23 +1614,40 @@
                     <span class="folder-meta">文件夹</span>
                     <div style="flex: 1;"></div>
                     <div class="file-actions">
-                        <button class="icon-btn" title="打包下载整个文件夹" data-act="download-folder">
+                        <button class="icon-btn" title="点击下载，右键复制链接" data-act="download-folder">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
                     </div>
                 `;
                 item.onclick = (e) => {
                     if (e.target.closest('button')) return;
-                    // 进入子文件夹，但不能超出 shareRoot 范围
                     if (folderPath === shareRoot || folderPath.startsWith(shareRoot + '/') || shareRoot === '') {
                         currentFolder = folderPath;
                         renderPublicFileList();
                     }
                 };
-                item.querySelector('[data-act="download-folder"]').onclick = (e) => { 
+                
+                const dlFolderBtn = item.querySelector('[data-act="download-folder"]');
+                dlFolderBtn.onclick = (e) => { 
                     e.stopPropagation(); 
                     downloadFolder(folderPath); 
                 };
+                dlFolderBtn.oncontextmenu = async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const utf8 = new TextEncoder().encode(folderPath);
+                    let bin = '';
+                    utf8.forEach(b => bin += String.fromCharCode(b));
+                    const folderB64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    const shareUrl = `${location.origin}${location.pathname}?share=${currentUserHash}&path=${folderB64}`;
+                    try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        showToast('✅ 文件夹分享链接已复制');
+                    } catch (err) {
+                        await showModal({ type: 'alert', title: '链接（请手动复制）', message: shareUrl });
+                    }
+                };
+                
                 listEl.appendChild(item);
             });
 
@@ -1657,17 +1664,28 @@
                         <span class="file-meta">${timeString} • ${formatBytes(totalSize)}</span>
                     </div>
                     <div class="file-actions">
-                        <button class="icon-btn" title="预览" data-act="preview-link">
+                        <button class="icon-btn" title="左键预览，右键复制预览链接" data-act="preview-link">
                             <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                         </button>
-                        <button class="icon-btn" title="下载" data-act="download">
+                        <button class="icon-btn" title="左键下载，右键复制下载链接" data-act="download">
                             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         </button>
                     </div>
                 `;
 
-                item.querySelector('[data-act="preview-link"]').onclick = () => openFileLink(file.baseName, file.fileName, 'preview');
-                item.querySelector('[data-act="download"]').onclick = () => openFileLink(file.baseName, file.fileName, 'download');
+                const previewBtn = item.querySelector('[data-act="preview-link"]');
+                previewBtn.onclick = () => openFileLink(file.baseName, file.fileName, 'preview');
+                previewBtn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    copyFileLink(file.baseName, file.fileName, 'preview');
+                };
+
+                const downloadBtn = item.querySelector('[data-act="download"]');
+                downloadBtn.onclick = () => openFileLink(file.baseName, file.fileName, 'download');
+                downloadBtn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    copyFileLink(file.baseName, file.fileName, 'download');
+                };
 
                 listEl.appendChild(item);
             });
