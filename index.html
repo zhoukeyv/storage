@@ -189,6 +189,7 @@
         // ======================= 鉴权 =======================
         let authToken = localStorage.getItem('authToken') || '';
         let currentEmail = '';
+        let currentUserHash = '';
 
         const _fetch = window.fetch.bind(window);
         window.fetch = function(url, options = {}) {
@@ -211,6 +212,10 @@
                 const data = await resp.json();
                 if (data.loggedIn) {
                     currentEmail = data.email;
+                    const meResp = await _fetch(`${WORKER_URL}/auth/me`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    currentUserHash = (await meResp.json()).userHash;
                     document.getElementById('currentUser').innerText = data.email;
                     return true;
                 }
@@ -290,6 +295,11 @@
                 authToken = data.token;
                 currentEmail = data.email;
                 localStorage.setItem('authToken', authToken);
+                // 🆕 获取 userHash
+                const meResp = await _fetch(`${WORKER_URL}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                currentUserHash = (await meResp.json()).userHash;
                 msgEl.innerText = '✅ 登录成功';
                 msgEl.style.color = 'var(--success)';
                 
@@ -402,7 +412,7 @@
 
         // ======================= 链接 =======================
         function getFileLink(baseName, fileName, mode) {
-            let link = `${WORKER_URL}/dl/${baseName}/${encodeURIComponent(fileName)}`;
+            let link = `${WORKER_URL}/dl/${currentUserHash}/${baseName}/${encodeURIComponent(fileName)}`;
             if (mode === 'download') link += '?download=1';
             return link;
         }
