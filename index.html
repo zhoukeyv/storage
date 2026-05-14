@@ -847,11 +847,15 @@
                     </div>
                 `;
                 
-                item.querySelector('.file-checkbox').onchange = (e) => toggleFileSelection(file.fullPath, e.target.checked);
-                item.querySelector('[data-act="link"]').onclick = () => copyFileLink(file.baseName, file.fileName);
-                item.querySelector('[data-act="download"]').onclick = () => downloadFile(file.fullPath, file.fileName);
-                item.querySelector('[data-act="rename"]').onclick = () => renameFile(file.fullPath, file.fileName, file.folderPath, file.baseName, file.timestamp);
-                item.querySelector('[data-act="delete"]').onclick = () => deleteFile(file.fullPath, file.fileName, file.baseName);
+                const bind = (selector, handler) => {
+                    const el = item.querySelector(selector);
+                    if (el) el.onclick = handler;
+                };
+                bind('[data-act="preview-link"]', () => copyFileLink(file.baseName, file.fileName, 'preview'));
+                bind('[data-act="download-link"]', () => copyFileLink(file.baseName, file.fileName, 'download'));
+                bind('[data-act="download"]', () => downloadFile(file.fullPath, file.fileName));
+                bind('[data-act="rename"]', () => renameFile(file.fullPath, file.fileName, file.folderPath, file.baseName, file.timestamp));
+                bind('[data-act="delete"]', () => deleteFile(file.fullPath, file.fileName, file.baseName));
                 
                 listEl.appendChild(item);
             });
