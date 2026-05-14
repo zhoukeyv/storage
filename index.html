@@ -966,7 +966,9 @@
             });
             if (!newName || newName.trim() === '' || newName === file.fileName) return;
             
-            const folderPrefix = file.folderPath ? file.folderPath.replace(/\//g, '__') + '___' : '';
+            const folderPrefix = file.folderPath
+                ? file.folderPath.split('/').filter(p => p).map(p => encodeBaseName(p)).join('__') + '___'
+                : '';
             const newBaseName = `F_${folderPrefix}${encodeBaseName(newName.trim())}_${file.timestamp}`;
             
             try {
@@ -1146,7 +1148,10 @@
             
             for (const file of affectedFiles) {
                 const newFolderPath = newPath + file.folderPath.substring(folderPath.length);
-                const newFolderPrefix = newFolderPath ? newFolderPath.replace(/\//g, '__') + '___' : '';
+                // 🔧 每段文件夹名都用 base64url 编码
+                const newFolderPrefix = newFolderPath
+                    ? newFolderPath.split('/').filter(p => p).map(p => encodeBaseName(p)).join('__') + '___'
+                    : '';
                 const newBaseName = `F_${newFolderPrefix}${encodeBaseName(file.fileName)}_${file.timestamp}`;
                 try {
                     await fetch(`${WORKER_URL}/rename?oldPrefix=${encodeURIComponent(file.baseName)}&newPrefix=${encodeURIComponent(newBaseName)}`, {
